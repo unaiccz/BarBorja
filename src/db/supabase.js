@@ -1,30 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Función para obtener variables de entorno de manera robusta
-function getEnvVar(name) {
-    // Primero intenta import.meta.env (Astro/Vite)
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-        return import.meta.env[name];
-    }
-    
-    // Fallback a process.env (Node.js)
-    if (typeof process !== 'undefined' && process.env) {
-        return process.env[name];
-    }
-    
-    return undefined;
-}
-
-const supabaseUrl = getEnvVar('SUPABASE_URL');
-const supabaseKey = getEnvVar('SUPABASE_KEY');
+// Variables de entorno para Supabase
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL || import.meta.env.SUPABASE_URL;
+const supabaseKey = import.meta.env.PUBLIC_SUPABASE_KEY || import.meta.env.SUPABASE_KEY;
 
 // Validación de variables de entorno
 if (!supabaseUrl || !supabaseKey) {
-    console.error('❌ Variables de entorno SUPABASE_URL y SUPABASE_KEY no configuradas');
-    console.log('Configuración actual:');
-    console.log('- SUPABASE_URL:', supabaseUrl ? 'Configurada' : 'No configurada');
-    console.log('- SUPABASE_KEY:', supabaseKey ? 'Configurada' : 'No configurada');
+    console.error('❌ Variables de entorno de Supabase no configuradas');
+    console.error('Configuración actual:');
+    console.error('- SUPABASE_URL:', supabaseUrl ? '✅ Configurada' : '❌ No configurada');
+    console.error('- SUPABASE_KEY:', supabaseKey ? '✅ Configurada' : '❌ No configurada');
+    console.error('Verifica que tengas las variables PUBLIC_SUPABASE_URL y PUBLIC_SUPABASE_KEY en tu archivo .env');
     throw new Error('Variables de entorno de Supabase no configuradas');
 }
+
+console.log('🔗 Conectando a Supabase...');
+console.log('🔗 Supabase URL:', supabaseUrl.substring(0, 30) + '...');
 
 export const supabase = createClient(supabaseUrl, supabaseKey);

@@ -1,3 +1,7 @@
+ // Cargar variables de entorno
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { supabase } from './supabase.js';
 
 export async function diagnoseConnection() {
