@@ -7,6 +7,8 @@ import {
     updateOrderStatus
 } from '../../functions/orders.js';
 
+export const prerender = false;
+
 export const GET = async ({ request }) => {
     try {
         const url = new URL(request.url);

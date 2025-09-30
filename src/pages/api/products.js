@@ -1,5 +1,7 @@
 import { getProducts, createProduct as createProductDB, updateProduct as updateProductDB, deleteProduct as deleteProductDB } from '../../functions/products.js';
 
+export const prerender = false;
+
 export const GET = async ({ request }) => {
     try {
         const products = await getProducts();

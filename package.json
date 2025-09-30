@@ -11,6 +11,7 @@
     "diagnose": "node -e \"import('./src/db/diagnose.js').then(m => m.fullDiagnosis())\""
   },
   "dependencies": {
+    "@astrojs/node": "^9.4.4",
     "@supabase/supabase-js": "^2.57.4",
     "astro": "^5.13.8",
     "dotenv": "^17.2.2",

@@ -1,4 +1,6 @@
-import { updateProduct as updateProductDB, deleteProduct as deleteProductDB } from '../../functions/products.js';
+import { updateProduct as updateProductDB, deleteProduct as deleteProductDB } from '../../../functions/products.js';
+
+export const prerender = false;
 
 export const PUT = async ({ request, params }) => {
     try {
