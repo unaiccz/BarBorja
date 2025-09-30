@@ -1,16 +1,31 @@
 import { supabase } from "../db/supabase.js";
 
 export async function getProducts() {
-    const { data, error } = await supabase
-        .from('products')
-        .select('*');
+    console.log('🔄 Iniciando getProducts...');
+    console.log('🔗 Supabase URL:', import.meta.env?.SUPABASE_URL?.substring(0, 30) + '...' || 'No configurada');
 
-    if (error) {
-        console.error('Error fetching products:', error);
+    try {
+        const { data, error } = await supabase
+            .from('products')
+            .select('*');
+
+        if (error) {
+            console.error('❌ Error fetching products:', error);
+            console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            return [];
+        }
+
+        console.log('✅ Products fetched successfully:', data?.length || 0, 'items');
+        return data;
+    } catch (err) {
+        console.error('❌ Unexpected error in getProducts:', err);
         return [];
     }
-
-    return data;
 }
 export async function getProductById(id) {
     const { data, error } = await supabase

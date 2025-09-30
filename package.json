@@ -6,7 +6,9 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "test:db": "node src/db/test.js",
+    "diagnose": "node -e \"import('./src/db/diagnose.js').then(m => m.fullDiagnosis())\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
