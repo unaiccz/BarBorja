@@ -1,0 +1,1084 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getProducts } from '../../functions/products.js';
+
+export async function getStaticPaths() {
+    const paths = [];
+    for (let i = 1; i <= 50; i++) {
+        paths.push({ params: { numero: i.toString() } });
+    }
+    return paths;
+}
+
+const { numero } = Astro.params;
+const products = await getProducts();
+const mesaNumero = parseInt(numero || '0');
+
+if (isNaN(mesaNumero) || mesaNumero <= 0) {
+    return Astro.redirect('/');
+}
+---
+
+<Layout title={`Mesa ${numero} - BarBorja`}>
+    <div class="mesa-header">
+        <h1>Mesa {numero}</h1>
+        <p class="mesa-subtitle">Bienvenidos a BarBorja</p>
+    </div>
+
+    <div class="carta-container">
+        <div class="section-header">
+            <h2>Nuestra Carta</h2>
+            <div class="mesa-info">
+                <span class="mesa-badge">Mesa {numero}</span>
+            </div>
+        </div>
+
+        <div class="productos-grid">
+            {products && products.length > 0 ? (
+                products.map((product) => (
+                    <div class="product-card">
+                        <div class="product-header">
+                            <h3>{product.name}</h3>
+                            <div class={`type-badge ${product.type}`}>
+                                {product.type === 'cocina' ? '🍳 Cocina' : '🍺 Barra'}
+                            </div>
+                        </div>
+                        
+                        <div class="product-price">{product.price}€</div>
+                        
+                        <div class="product-stock">
+                            <span class={`stock-indicator ${product.stock > 10 ? 'high' : product.stock > 0 ? 'low' : 'out'}`} id={`stock-${product.product_id}`} data-stock={product.stock}>
+                                📦 Stock: <span id={`stock-value-${product.product_id}`}>{product.stock || 0}</span>
+                            </span>
+                        </div>
+                        
+                        {product.description && (
+                            <p class="product-description">"{product.description}"</p>
+                        )}
+                        
+                        <div class="product-actions">
+                            <div class="quantity-controls">
+                                <button class="qty-btn" onclick={`decreaseQuantity(${product.product_id})`} disabled={product.stock === 0}>-</button>
+                                <span class="quantity" id={`qty-${product.product_id}`}>0</span>
+                                <button class="qty-btn" onclick={`increaseQuantity(${product.product_id}, ${product.stock})`} disabled={product.stock === 0}>+</button>
+                            </div>
+                            <button class="add-btn" onclick={`addToOrder(${product.product_id}, "${product.name}", ${product.price}, "${product.type}", ${product.stock})`} disabled={product.stock === 0}>
+                                {product.stock > 0 ? 'Agregar' : 'Sin Stock'}
+                            </button>
+                        </div>
+                    </div>
+                ))
+            ) : (
+                <div class="no-products">
+                    <h3>No hay productos disponibles</h3>
+                    <p>Estamos preparando nuestra carta para ti.</p>
+                </div>
+            )}
+        </div>
+    </div>
+
+    <!-- Historial de Pedidos -->
+    <div class="order-history-container" id="order-history">
+        <div class="order-history-header">
+            <h3>📋 Historial de Pedidos - Mesa {numero}</h3>
+            <button class="history-toggle" id="history-toggle">▼</button>
+        </div>
+        <div class="order-history-content" id="order-history-content">
+            <div id="order-history-items" class="order-history-items">
+                <p style="text-align: center; color: #666; padding: 20px;">Cargando pedidos...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="cart-container" id="cart">
+        <div class="cart-header">
+            <h3>Tu Pedido - Mesa {numero}</h3>
+            <button class="cart-toggle" id="cart-toggle">🛒</button>
+        </div>
+        <div class="cart-content" id="cart-content">
+            <div class="cart-items" id="cart-items"></div>
+            <div class="cart-total">
+                <div class="total-line">
+                    <span>Total: </span>
+                    <span class="total-amount" id="total-amount">0.00€</span>
+                </div>
+            </div>
+            <div class="cart-actions">
+                <button class="btn btn-primary" onclick="realizarPedido()">
+                    Realizar Pedido
+                </button>
+                <button class="btn btn-secondary" onclick="limpiarCarrito()">
+                    Limpiar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+</Layout>
+
+<style>
+    .mesa-header {
+        text-align: center;
+        padding: 30px 20px;
+        background: linear-gradient(135deg, #2c3e50, #34495e);
+        color: white;
+        margin-bottom: 30px;
+    }
+
+    .mesa-header h1 {
+        font-size: 2.5rem;
+        margin: 0;
+        font-family: 'Georgia', serif;
+    }
+
+    .mesa-subtitle {
+        font-size: 1.2rem;
+        margin: 10px 0 0 0;
+        opacity: 0.9;
+    }
+
+    .carta-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #d4af37;
+    }
+
+    .section-header h2 {
+        font-family: 'Georgia', serif;
+        color: #2c3e50;
+        margin: 0;
+    }
+
+    .mesa-badge {
+        background: linear-gradient(135deg, #d4af37, #f1c40f);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 14px;
+    }
+
+    .productos-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 25px;
+        margin-bottom: 100px;
+    }
+
+    .product-card {
+        background: white;
+        border: 2px solid #d4af37;
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 4px 15px rgba(212, 175, 55, 0.2);
+        transition: transform 0.3s ease;
+    }
+
+    .product-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(212, 175, 55, 0.3);
+    }
+
+    .product-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px dotted #d4af37;
+    }
+
+    .product-header h3 {
+        margin: 0;
+        font-family: 'Georgia', serif;
+        color: #2c3e50;
+        font-size: 1.3rem;
+    }
+
+    .type-badge {
+        padding: 4px 12px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: bold;
+        color: white;
+    }
+
+    .type-badge.cocina {
+        background: linear-gradient(135deg, #e74c3c, #c0392b);
+    }
+
+    .type-badge.barra {
+        background: linear-gradient(135deg, #3498db, #2980b9);
+    }
+
+    .product-price {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #d4af37;
+        text-align: center;
+        margin: 15px 0;
+        font-family: 'Georgia', serif;
+    }
+
+    .product-stock {
+        text-align: center;
+        margin: 10px 0;
+    }
+
+    .stock-indicator {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stock-indicator.high {
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+        color: white;
+    }
+
+    .stock-indicator.low {
+        background: linear-gradient(135deg, #f39c12, #e67e22);
+        color: white;
+    }
+
+    .stock-indicator.out {
+        background: linear-gradient(135deg, #e74c3c, #c0392b);
+        color: white;
+    }
+
+    .product-description {
+        font-style: italic;
+        color: #5d4e37;
+        text-align: center;
+        margin: 15px 0;
+        line-height: 1.5;
+    }
+
+    .product-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px dotted #d4af37;
+    }
+
+    .quantity-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .qty-btn {
+        width: 35px;
+        height: 35px;
+        border: 2px solid #d4af37;
+        background: white;
+        color: #d4af37;
+        border-radius: 50%;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .qty-btn:hover {
+        background: #d4af37;
+        color: white;
+    }
+
+    .quantity {
+        font-size: 18px;
+        font-weight: bold;
+        color: #2c3e50;
+        min-width: 30px;
+        text-align: center;
+    }
+
+    .add-btn {
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 25px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .add-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+    }
+
+    /* Order History Styles */
+    .order-history-container {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        background: white;
+        border: 2px solid #3498db;
+        border-radius: 15px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        max-width: 400px;
+        z-index: 1000;
+    }
+
+    .order-history-header {
+        background: linear-gradient(135deg, #3498db, #2980b9);
+        color: white;
+        padding: 15px;
+        border-radius: 13px 13px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+    }
+
+    .order-history-header h3 {
+        margin: 0;
+        font-size: 16px;
+    }
+
+    .history-toggle {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+    }
+
+    .history-toggle.collapsed {
+        transform: rotate(-90deg);
+    }
+
+    .order-history-content {
+        padding: 15px;
+        max-height: 450px;
+        overflow-y: auto;
+    }
+
+    .order-history-content.collapsed {
+        display: none;
+    }
+
+    .order-history-items {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .order-card {
+        background: #f8f9fa;
+        border-left: 4px solid #3498db;
+        border-radius: 8px;
+        padding: 12px;
+        transition: transform 0.2s ease;
+    }
+
+    .order-card:hover {
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .order-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .order-id {
+        font-weight: bold;
+        color: #2c3e50;
+        font-size: 14px;
+    }
+
+    .order-status {
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: bold;
+        color: white;
+    }
+
+    .order-status.pendiente {
+        background: linear-gradient(135deg, #f39c12, #e67e22);
+    }
+
+    .order-status.preparando {
+        background: linear-gradient(135deg, #3498db, #2980b9);
+    }
+
+    .order-status.listo {
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+    }
+
+    .order-status.entregado {
+        background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+    }
+
+    .order-status.cancelado {
+        background: linear-gradient(135deg, #e74c3c, #c0392b);
+    }
+
+    .order-time {
+        font-size: 12px;
+        color: #7f8c8d;
+        margin-bottom: 8px;
+    }
+
+    .order-items-list {
+        font-size: 13px;
+        color: #555;
+    }
+
+    .order-items-list ul {
+        margin: 5px 0;
+        padding-left: 20px;
+    }
+
+    .order-items-list li {
+        margin: 3px 0;
+    }
+
+    .order-total {
+        font-weight: bold;
+        color: #d4af37;
+        font-size: 14px;
+        margin-top: 8px;
+        text-align: right;
+    }
+
+    .cart-container {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: white;
+        border: 2px solid #d4af37;
+        border-radius: 15px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        max-width: 350px;
+        z-index: 1000;
+    }
+
+    .cart-header {
+        background: #d4af37;
+        color: white;
+        padding: 15px;
+        border-radius: 13px 13px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+    }
+
+    .cart-header h3 {
+        margin: 0;
+        font-size: 16px;
+    }
+
+    .cart-toggle {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+    }
+
+    .cart-content {
+        padding: 15px;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .cart-content.collapsed {
+        display: none;
+    }
+
+    .cart-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+    }
+
+    .cart-item:last-child {
+        border-bottom: none;
+    }
+
+    .item-info {
+        flex: 1;
+    }
+
+    .item-name {
+        font-weight: bold;
+        color: #2c3e50;
+    }
+
+    .item-details {
+        font-size: 12px;
+        color: #666;
+    }
+
+    .item-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .cart-total {
+        border-top: 2px solid #d4af37;
+        padding-top: 15px;
+        margin-top: 15px;
+    }
+
+    .total-line {
+        display: flex;
+        justify-content: space-between;
+        font-size: 18px;
+        font-weight: bold;
+        color: #2c3e50;
+    }
+
+    .cart-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+    }
+
+    .btn {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+        background: #27ae60;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #2ecc71;
+    }
+
+    .btn-secondary {
+        background: #95a5a6;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #7f8c8d;
+    }
+
+    .no-products {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 60px 20px;
+        color: #666;
+    }
+
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+    }
+
+    .toast {
+        background: white;
+        border-left: 4px solid #27ae60;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        animation: slideIn 0.3s ease;
+    }
+
+    .toast.error {
+        border-left-color: #e74c3c;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Estilos para botones deshabilitados */
+    button:disabled {
+        background: #bdc3c7 !important;
+        cursor: not-allowed !important;
+        opacity: 0.6;
+        transform: none !important;
+    }
+
+    button:disabled:hover {
+        background: #bdc3c7 !important;
+        transform: none !important;
+    }
+
+    @media (max-width: 768px) {
+        .productos-grid { grid-template-columns: 1fr; }
+        .cart-container { 
+            left: 10px; 
+            right: 10px; 
+            max-width: none; 
+            bottom: 10px;
+        }
+        .order-history-container {
+            left: 10px;
+            right: 10px;
+            max-width: none;
+            bottom: auto;
+            top: 80px;
+        }
+        .product-actions { flex-direction: column; gap: 15px; }
+    }
+</style>
+
+<script define:vars={{ mesaNumero }}>
+    let cart = [];
+    let cartVisible = true;
+
+    function increaseQuantity(productId, maxStock = Infinity) {
+        const qtyElement = document.getElementById(`qty-${productId}`);
+        let currentQty = parseInt(qtyElement.textContent);
+        
+        if (currentQty < maxStock) {
+            qtyElement.textContent = currentQty + 1;
+        } else {
+            showToast(`Stock máximo disponible: ${maxStock}`, 'error');
+        }
+    }
+
+    function decreaseQuantity(productId) {
+        const qtyElement = document.getElementById(`qty-${productId}`);
+        let currentQty = parseInt(qtyElement.textContent);
+        if (currentQty > 0) {
+            qtyElement.textContent = currentQty - 1;
+        }
+    }
+
+    function addToOrder(productId, productName, price, productType, stock = 0) {
+        const qtyElement = document.getElementById(`qty-${productId}`);
+        const quantity = parseInt(qtyElement.textContent);
+        
+        if (stock === 0) {
+            showToast('Producto sin stock disponible', 'error');
+            return;
+        }
+        
+        if (quantity === 0) {
+            showToast('Selecciona una cantidad mayor a 0', 'error');
+            return;
+        }
+
+        if (quantity > stock) {
+            showToast(`Stock insuficiente. Disponible: ${stock}`, 'error');
+            return;
+        }
+
+        const existingItem = cart.find(item => item.productId === productId);
+        
+        if (existingItem && (existingItem.quantity + quantity) > stock) {
+            showToast(`No puedes agregar más. Ya tienes ${existingItem.quantity} en el carrito. Stock disponible: ${stock}`, 'error');
+            return;
+        }
+        
+        if (existingItem) {
+            existingItem.quantity += quantity;
+        } else {
+            cart.push({
+                productId,
+                name: productName,
+                price,
+                quantity,
+                type: productType
+            });
+        }
+
+        qtyElement.textContent = '0';
+        
+        // Update stock display in real-time
+        updateStockDisplay(productId, stock, quantity);
+        
+        updateCartDisplay();
+        showToast(`${productName} agregado al pedido`, 'success');
+    }
+
+    // Update stock display after adding to cart
+    function updateStockDisplay(productId, currentStock, quantityAdded) {
+        const stockValueElement = document.getElementById(`stock-value-${productId}`);
+        const stockIndicator = document.getElementById(`stock-${productId}`);
+        
+        if (!stockValueElement || !stockIndicator) return;
+        
+        // Calculate quantity already in cart for this product
+        const existingItem = cart.find(item => item.productId === productId);
+        const totalInCart = existingItem ? existingItem.quantity : 0;
+        
+        // Calculate remaining stock
+        const remainingStock = Math.max(0, currentStock - totalInCart);
+        
+        // Update the displayed stock value
+        stockValueElement.textContent = remainingStock;
+        stockIndicator.dataset.stock = remainingStock;
+        
+        // Update stock indicator color classes
+        stockIndicator.classList.remove('high', 'low', 'out');
+        if (remainingStock > 10) {
+            stockIndicator.classList.add('high');
+        } else if (remainingStock > 0) {
+            stockIndicator.classList.add('low');
+        } else {
+            stockIndicator.classList.add('out');
+        }
+        
+        // Disable buttons if stock is 0
+        if (remainingStock === 0) {
+            const increaseBtn = document.querySelector(`button[onclick*="increaseQuantity(${productId}"]`);
+            const decreaseBtn = document.querySelector(`button[onclick*="decreaseQuantity(${productId}"]`);
+            const addBtn = document.querySelector(`button[onclick*="addToOrder(${productId}"]`);
+            
+            if (increaseBtn) increaseBtn.disabled = true;
+            if (decreaseBtn) decreaseBtn.disabled = true;
+            if (addBtn) {
+                addBtn.disabled = true;
+                addBtn.textContent = 'Sin Stock';
+            }
+        }
+    }
+
+    function updateCartDisplay() {
+        const cartItemsContainer = document.getElementById('cart-items');
+        const totalAmountElement = document.getElementById('total-amount');
+        
+        if (cart.length === 0) {
+            cartItemsContainer.innerHTML = '<p style="text-align: center; color: #666;">Tu carrito está vacío</p>';
+            totalAmountElement.textContent = '0.00€';
+            return;
+        }
+
+        let html = '';
+        let total = 0;
+
+        cart.forEach((item, index) => {
+            const subtotal = item.price * item.quantity;
+            total += subtotal;
+            
+            html += `
+                <div class="cart-item">
+                    <div class="item-info">
+                        <div class="item-name">${item.name}</div>
+                        <div class="item-details">${item.quantity} x ${item.price}€ = ${subtotal.toFixed(2)}€</div>
+                    </div>
+                    <div class="item-actions">
+                        <button class="qty-btn" onclick="removeFromCart(${index})">×</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        cartItemsContainer.innerHTML = html;
+        totalAmountElement.textContent = total.toFixed(2) + '€';
+    }
+
+    function removeFromCart(index) {
+        cart.splice(index, 1);
+        updateCartDisplay();
+        showToast('Producto eliminado del carrito', 'success');
+    }
+
+    function limpiarCarrito() {
+        cart = [];
+        updateCartDisplay();
+        showToast('Carrito limpiado', 'success');
+    }
+
+    async function realizarPedido() {
+        if (cart.length === 0) {
+            showToast('El carrito está vacío', 'error');
+            return;
+        }
+
+        try {
+            const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            console.log('🛒 Creando pedido...', { totalAmount, mesa: mesaNumero });
+
+            // Use Supabase directly from client
+            const { supabase } = await import('/src/db/supabase.js');
+
+            // Create the order
+            const { data: order, error: orderError } = await supabase
+                .from('orders')
+                .insert({
+                    table_number: mesaNumero,
+                    total_amount: totalAmount,
+                    status: 'pendiente'
+                })
+                .select()
+                .single();
+          
+            if (orderError) {
+                console.error('❌ Error creating order:', orderError);
+                showToast('Error al crear el pedido', 'error');
+                return;
+            }
+
+            console.log('✅ Pedido creado:', order);
+
+            // Insert order items
+            const orderItemsWithOrderId = cart.map(item => ({
+                order_id: order.order_id,
+                product_id: item.productId,
+                quantity: item.quantity,
+                price: item.price,
+                note: null
+            }));
+            
+            const { error: itemsError } = await supabase
+                .from('order_items')
+                .insert(orderItemsWithOrderId);
+
+            if (itemsError) {
+                console.error('❌ Error creating order items:', itemsError);
+                showToast('Error al crear los items del pedido', 'error');
+                return;
+            }
+
+            // Update product stock
+            for (const item of cart) {
+                console.log(`📦 Actualizando stock del producto ${item.productId}, cantidad: ${item.quantity}`);
+                
+                // First get current stock
+                const { data: product, error: getError } = await supabase
+                    .from('products')
+                    .select('stock')
+                    .eq('product_id', item.productId)
+                    .single();
+                
+                if (getError) {
+                    console.warn('⚠️ Warning: Could not get current stock for product', item.productId, getError);
+                    continue;
+                }
+                
+                // Calculate new stock (never below 0)
+                const newStock = Math.max(0, (product.stock || 0) - item.quantity);
+                
+                // Update stock
+                const { error: stockError } = await supabase
+                    .from('products')
+                    .update({ stock: newStock })
+                    .eq('product_id', item.productId);
+                
+                if (stockError) {
+                    console.warn('⚠️ Warning: Could not update stock for product', item.productId, stockError);
+                } else {
+                    console.log(`✅ Stock actualizado para producto ${item.productId}: ${product.stock} → ${newStock}`);
+                }
+            }
+
+            console.log(`✅ Pedido creado con stock actualizado - Mesa ${mesaNumero} - ID: ${order.order_id}`);
+            showToast('¡Pedido realizado con éxito!', 'success');
+            limpiarCarrito();
+            
+            // Refresh order history to show the new order
+            await loadOrderHistory();
+            
+            // Reload the page to refresh product stock from database
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+
+        } catch (error) {
+            console.error('💥 Error al realizar pedido:', error);
+            showToast('Error al realizar el pedido', 'error');
+        }
+    }
+
+    function toggleCart() {
+        const cartContent = document.getElementById('cart-content');
+        cartVisible = !cartVisible;
+        cartContent.classList.toggle('collapsed', !cartVisible);
+    }
+
+    function showToast(message, type = 'success') {
+        const toastContainer = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        
+        toastContainer.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+
+    window.increaseQuantity = increaseQuantity;
+    window.decreaseQuantity = decreaseQuantity;
+    window.addToOrder = addToOrder;
+    window.removeFromCart = removeFromCart;
+    window.limpiarCarrito = limpiarCarrito;
+    window.realizarPedido = realizarPedido;
+
+    // Load order history
+    async function loadOrderHistory() {
+        try {
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            const { data: orders, error } = await supabase
+                .from('orders')
+                .select(`
+                    order_id,
+                    table_number,
+                    status,
+                    total_amount,
+                    created_at,
+                    order_items (
+                        order_item_id,
+                        quantity,
+                        price,
+                        products (
+                            name,
+                            type
+                        )
+                    )
+                `)
+                .eq('table_number', mesaNumero)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('❌ Error cargando historial:', error);
+                document.getElementById('order-history-items').innerHTML = 
+                    '<p style="text-align: center; color: #e74c3c; padding: 20px;">Error al cargar el historial</p>';
+                return;
+            }
+
+            displayOrderHistory(orders || []);
+        } catch (error) {
+            console.error('❌ Error en loadOrderHistory:', error);
+            document.getElementById('order-history-items').innerHTML = 
+                '<p style="text-align: center; color: #e74c3c; padding: 20px;">Error al cargar el historial</p>';
+        }
+    }
+
+    function displayOrderHistory(orders) {
+        const container = document.getElementById('order-history-items');
+        
+        if (!orders || orders.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No hay pedidos aún para esta mesa</p>';
+            return;
+        }
+
+        let html = '';
+        
+        orders.forEach(order => {
+            const date = new Date(order.created_at);
+            const formattedDate = date.toLocaleDateString('es-ES', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
+            });
+            const formattedTime = date.toLocaleTimeString('es-ES', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+
+            // Get status display
+            const statusLabels = {
+                'pendiente': 'Pendiente',
+                'preparando': 'Preparando',
+                'listo': 'Listo',
+                'entregado': 'Entregado',
+                'cancelado': 'Cancelado'
+            };
+
+            const statusLabel = statusLabels[order.status] || order.status;
+
+            html += `
+                <div class="order-card">
+                    <div class="order-card-header">
+                        <span class="order-id">Pedido #${order.order_id}</span>
+                        <span class="order-status ${order.status}">${statusLabel}</span>
+                    </div>
+                    <div class="order-time">📅 ${formattedDate} - 🕐 ${formattedTime}</div>
+                    <div class="order-items-list">
+                        <strong>Productos:</strong>
+                        <ul>
+            `;
+
+            // List order items
+            if (order.order_items && order.order_items.length > 0) {
+                order.order_items.forEach(item => {
+                    const productName = item.products?.name || 'Producto';
+                    const emoji = item.products?.type === 'cocina' ? '🍳' : '🍺';
+                    html += `<li>${emoji} ${item.quantity}x ${productName} (${item.price}€)</li>`;
+                });
+            }
+
+            html += `
+                        </ul>
+                    </div>
+                    <div class="order-total">Total: ${order.total_amount.toFixed(2)}€</div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    function toggleOrderHistory() {
+        const historyContent = document.getElementById('order-history-content');
+        const toggleBtn = document.getElementById('history-toggle');
+        const isCollapsed = historyContent.classList.toggle('collapsed');
+        
+        if (toggleBtn) {
+            toggleBtn.textContent = isCollapsed ? '▶' : '▼';
+            toggleBtn.classList.toggle('collapsed', isCollapsed);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const cartToggle = document.getElementById('cart-toggle');
+        if (cartToggle) {
+            cartToggle.addEventListener('click', toggleCart);
+        }
+        
+        const historyToggle = document.getElementById('history-toggle');
+        if (historyToggle) {
+            historyToggle.addEventListener('click', toggleOrderHistory);
+        }
+        
+        updateCartDisplay();
+        loadOrderHistory();
+        
+        // Refresh order history every 5 seconds for real-time updates
+        setInterval(() => {
+            console.log('🔄 Auto-actualizando historial de pedidos...');
+            loadOrderHistory();
+        }, 5000);
+    });
+</script>

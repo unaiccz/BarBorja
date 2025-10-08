@@ -12,13 +12,9 @@ import Layout from '../../layouts/Layout.astro';
                 <span class="icon">📦</span>
                 Productos
             </button>
-            <button class="tab-button" data-tab="cocina">
-                <span class="icon">👨‍🍳</span>
-                Pedidos Cocina
-            </button>
-            <button class="tab-button" data-tab="barra">
-                <span class="icon">🍺</span>
-                Pedidos Barra
+            <button class="tab-button" data-tab="pedidos">
+                <span class="icon">📋</span>
+                Pedidos
             </button>
         </nav>
 
@@ -94,34 +90,24 @@ import Layout from '../../layouts/Layout.astro';
         </div>
 
         <!-- Kitchen Orders Section -->
-        <div id="cocina" class="tab-content">
+        <div id="pedidos" class="tab-content">
             <div class="section-header">
-                <h2>Pedidos de Cocina</h2>
+                <h2>Gestión de Pedidos</h2>
                 <div class="status-filters">
                     <button class="filter-btn active" data-status="all">Todos</button>
-                    <button class="filter-btn" data-status="pending">Pendientes</button>
-                    <button class="filter-btn" data-status="preparing">En Preparación</button>
-                    <button class="filter-btn" data-status="ready">Listos</button>
+                    <button class="filter-btn" data-status="pendiente">Pendientes</button>
+                    <button class="filter-btn" data-status="preparando">En Preparación</button>
+                    <button class="filter-btn" data-status="listo">Listos</button>
+                    <button class="filter-btn" data-status="entregado">Entregados</button>
                 </div>
             </div>
-            <div id="kitchen-orders" class="orders-container">
-                <!-- Kitchen orders will be loaded here -->
+            <div class="type-filters" style="display: flex; gap: 10px; margin-bottom: 20px; justify-content: center;">
+                <button class="type-filter-btn active" data-type="all">📋 Todos</button>
+                <button class="type-filter-btn" data-type="cocina">🍳 Cocina</button>
+                <button class="type-filter-btn" data-type="barra">🍺 Barra</button>
             </div>
-        </div>
-
-        <!-- Bar Orders Section -->
-        <div id="barra" class="tab-content">
-            <div class="section-header">
-                <h2>Pedidos de Barra</h2>
-                <div class="status-filters">
-                    <button class="filter-btn active" data-status="all">Todos</button>
-                    <button class="filter-btn" data-status="pending">Pendientes</button>
-                    <button class="filter-btn" data-status="preparing">En Preparación</button>
-                    <button class="filter-btn" data-status="ready">Listos</button>
-                </div>
-            </div>
-            <div id="bar-orders" class="orders-container">
-                <!-- Bar orders will be loaded here -->
+            <div id="orders-list" class="orders-container">
+                <!-- All orders will be loaded here -->
             </div>
         </div>
     </div>
@@ -833,6 +819,39 @@ import Layout from '../../layouts/Layout.astro';
         border-color: #007bff;
     }
 
+    /* Type Filters */
+    .type-filters {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        justify-content: center;
+    }
+
+    .type-filter-btn {
+        padding: 10px 20px;
+        border: 2px solid #e9ecef;
+        background: white;
+        border-radius: 25px;
+        cursor: pointer;
+        font-size: 15px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    .type-filter-btn:hover {
+        border-color: #d4af37;
+        color: #d4af37;
+        box-shadow: 0 4px 8px rgba(212,175,55,0.2);
+    }
+
+    .type-filter-btn.active {
+        background: linear-gradient(135deg, #d4af37, #f1c40f);
+        color: white;
+        border-color: #d4af37;
+        box-shadow: 0 4px 12px rgba(212,175,55,0.3);
+    }
+
     /* Orders Container */
     .orders-container {
         display: grid;
@@ -1067,6 +1086,20 @@ import Layout from '../../layouts/Layout.astro';
         if (filterTypeSelect || searchInput) {
             initializeFilters();
         }
+
+        // Auto-refresh every 5 seconds
+        setInterval(async () => {
+            const activeTab = document.querySelector('.tab-button.active');
+            const tabId = activeTab?.getAttribute('data-tab');
+            
+            if (tabId === 'pedidos') {
+                console.log('🔄 Auto-actualizando pedidos...');
+                await loadOrders();
+            } else if (tabId === 'productos') {
+                console.log('🔄 Auto-actualizando productos...');
+                await loadProducts();
+            }
+        }, 5000);
     });
 
     // Tab functionality
@@ -1121,12 +1154,8 @@ import Layout from '../../layouts/Layout.astro';
         try {
             if (tabId === 'productos') {
                 await loadProducts();
-            } else if (tabId === 'cocina') {
+            } else if (tabId === 'pedidos') {
                 await loadOrders();
-                loadKitchenOrders();
-            } else if (tabId === 'barra') {
-                await loadOrders();
-                loadBarOrders();
             }
         } catch (error) {
             console.error('Error switching tabs:', error);
@@ -1280,8 +1309,20 @@ import Layout from '../../layouts/Layout.astro';
         
         showLoading();
         try {
-            const { getProducts } = await import('/src/functions/products.js');
-            products = await getProducts() || [];
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            const { data, error } = await supabase
+                .from('products')
+                .select('*')
+                .order('name', { ascending: true });
+            
+            if (error) {
+                console.error('❌ Error fetching products:', error);
+                products = [];
+            } else {
+                products = data || [];
+            }
+            
             renderProducts(products);
         } catch (error) {
             console.error('Error loading products:', error);
@@ -1417,29 +1458,87 @@ import Layout from '../../layouts/Layout.astro';
     }
 
     // Orders functionality
+    let currentTypeFilter = 'all';
+    let currentStatusFilter = 'all';
+
     async function loadOrders() {
         try {
-            const { getOrders } = await import('/src/functions/orders.js');
-            orders = await getOrders() || [];
+            console.log('🔄 Cargando órdenes desde admin...');
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            const { data, error } = await supabase
+                .from('orders')
+                .select(`
+                    order_id,
+                    table_number,
+                    status,
+                    estimated_time,
+                    total_amount,
+                    created_at,
+                    order_items (
+                        order_item_id,
+                        quantity,
+                        price,
+                        note,
+                        products (
+                            product_id,
+                            name,
+                            type
+                        )
+                    )
+                `)
+                .order('created_at', { ascending: false });
+            
+            if (error) {
+                console.error('❌ Error fetching orders:', error);
+                orders = [];
+            } else {
+                orders = data || [];
+                console.log('📋 Órdenes cargadas en admin:', orders.length);
+                
+                if (orders.length > 0) {
+                    console.log('Muestra de orden:', orders[0]);
+                }
+            }
+            
+            filterAndRenderOrders();
         } catch (error) {
-            console.error('Error loading orders:', error);
+            console.error('❌ Error loading orders:', error);
             showToast('Error al cargar los pedidos', 'error');
             orders = [];
         }
     }
 
+    function filterAndRenderOrders() {
+        console.log('🔍 Filtrando pedidos - Tipo:', currentTypeFilter, 'Estado:', currentStatusFilter);
+        
+        let filteredOrders = orders;
+        
+        // Filter by type
+        if (currentTypeFilter !== 'all') {
+            filteredOrders = filteredOrders.filter(order => {
+                if (!order.order_items || order.order_items.length === 0) return false;
+                return order.order_items.some(item => 
+                    item.products && item.products.type === currentTypeFilter
+                );
+            });
+        }
+        
+        // Filter by status
+        if (currentStatusFilter !== 'all') {
+            filteredOrders = filteredOrders.filter(order => order.status === currentStatusFilter);
+        }
+        
+        console.log('✅ Pedidos filtrados:', filteredOrders.length);
+        renderOrders(filteredOrders, 'orders-list');
+    }
+
     function loadKitchenOrders() {
-        const kitchenOrders = orders.filter(order => 
-            order.type === 'cocina' || order.type === 'mixed'
-        );
-        renderOrders(kitchenOrders, 'kitchen-orders');
+        // Deprecated - using unified orders now
     }
 
     function loadBarOrders() {
-        const barOrders = orders.filter(order => 
-            order.type === 'barra' || order.type === 'mixed'
-        );
-        renderOrders(barOrders, 'bar-orders');
+        // Deprecated - using unified orders now
     }
 
     function renderOrders(ordersToRender, containerId) {
@@ -1460,15 +1559,15 @@ import Layout from '../../layouts/Layout.astro';
                     </div>
                 </div>
                 <div class="order-info">
-                    ${order.customer_name ? `<p><strong>Cliente:</strong> ${order.customer_name}</p>` : ''}
-                    ${order.customer_phone ? `<p><strong>Teléfono:</strong> ${order.customer_phone}</p>` : ''}
-                    <p><strong>Tipo:</strong> ${getOrderTypeText(order.order_type)}</p>
+                    ${order.table_number ? `<p><strong>Mesa:</strong> ${order.table_number}</p>` : ''}
+                    <p><strong>Tipo:</strong> ${getOrderTypeFromProducts(order.order_items)}</p>
+                    <p><strong>Hora:</strong> ${new Date(order.created_at).toLocaleTimeString()}</p>
                 </div>
                 <div class="order-items">
                     ${order.order_items ? order.order_items.map(item => `
                         <div class="order-item">
                             <span>${item.quantity}x ${item.products?.name || 'Producto'}</span>
-                            <span>${(item.quantity * item.unit_price).toFixed(2)}€</span>
+                            <span>${(item.quantity * (item.price || 0)).toFixed(2)}€</span>
                         </div>
                     `).join('') : ''}
                 </div>
@@ -1486,32 +1585,46 @@ import Layout from '../../layouts/Layout.astro';
 
     function getStatusText(status) {
         const statusMap = {
-            'pending': 'Pendiente',
-            'preparing': 'En Preparación',
-            'ready': 'Listo',
-            'completed': 'Completado',
-            'cancelled': 'Cancelado'
+            'pendiente': 'Pendiente',
+            'preparando': 'Preparando',
+            'listo': 'Listo',
+            'entregado': 'Entregado',
+            'cancelado': 'Cancelado'
         };
         return statusMap[status] || status;
     }
 
-    function getOrderTypeText(orderType) {
-        const typeMap = {
-            'dine_in': 'En local',
-            'takeaway': 'Para llevar',
-            'delivery': 'A domicilio'
-        };
-        return typeMap[orderType] || orderType;
+    function getOrderTypeFromProducts(orderItems) {
+        if (!orderItems || orderItems.length === 0) return 'Desconocido';
+        
+        const hasKitchen = orderItems.some(item => item.products?.type === 'cocina');
+        const hasBar = orderItems.some(item => item.products?.type === 'barra');
+        
+        if (hasKitchen && hasBar) return '🍳🍺 Cocina y Barra';
+        if (hasKitchen) return '🍳 Cocina';
+        if (hasBar) return '🍺 Barra';
+        return 'Desconocido';
     }
+
+
 
     function getOrderActions(order) {
         switch (order.status) {
-            case 'pending':
-                return `<button class="btn btn-primary" onclick="updateOrderStatus(${order.order_id}, 'preparing')">Iniciar Preparación</button>`;
-            case 'preparing':
-                return `<button class="btn btn-success" onclick="updateOrderStatus(${order.order_id}, 'ready')">Marcar como Listo</button>`;
-            case 'ready':
-                return `<button class="btn btn-secondary" onclick="updateOrderStatus(${order.order_id}, 'completed')">Completar</button>`;
+            case 'pendiente':
+                return `
+                    <button class="btn btn-primary" onclick="updateOrderStatus(${order.order_id}, 'preparando')">Iniciar Preparación</button>
+                    <button class="btn btn-danger" onclick="updateOrderStatus(${order.order_id}, 'cancelado')">Cancelar</button>
+                `;
+            case 'preparando':
+                return `
+                    <button class="btn btn-success" onclick="updateOrderStatus(${order.order_id}, 'listo')">Marcar como Listo</button>
+                    <button class="btn btn-danger" onclick="updateOrderStatus(${order.order_id}, 'cancelado')">Cancelar</button>
+                `;
+            case 'listo':
+                return `<button class="btn btn-secondary" onclick="updateOrderStatus(${order.order_id}, 'entregado')">Marcar como Entregado</button>`;
+            case 'entregado':
+            case 'cancelado':
+                return '<span class="status-final">Pedido finalizado</span>';
             default:
                 return '';
         }
@@ -1521,62 +1634,100 @@ import Layout from '../../layouts/Layout.astro';
     window.updateOrderStatus = async function(orderId, newStatus) {
         showLoading();
         try {
-            const { updateOrderStatus: updateOrderStatusDB } = await import('/src/functions/orders.js');
-            const result = await updateOrderStatusDB(orderId, newStatus);
-
-            if (result) {
-                showToast('Estado del pedido actualizado', 'success');
-                await loadOrders();
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            // If cancelling order, restore stock first
+            if (newStatus === 'cancelado') {
+                console.log(`🔄 Restaurando stock para pedido cancelado: ${orderId}`);
                 
-                // Refresh the current tab
-                const activeTab = document.querySelector('.tab-button.active');
-                if (activeTab) {
-                    const tabId = activeTab.getAttribute('data-tab');
-                    if (tabId === 'cocina') {
-                        loadKitchenOrders();
-                    } else if (tabId === 'barra') {
-                        loadBarOrders();
+                // Get order items to restore stock
+                const { data: orderItems, error: itemsError } = await supabase
+                    .from('order_items')
+                    .select('product_id, quantity')
+                    .eq('order_id', orderId);
+                
+                if (!itemsError && orderItems && orderItems.length > 0) {
+                    // Restore stock for each item
+                    for (const item of orderItems) {
+                        console.log(`📦 Restaurando stock del producto ${item.product_id}, cantidad: +${item.quantity}`);
+                        
+                        // Get current stock
+                        const { data: product, error: getError } = await supabase
+                            .from('products')
+                            .select('stock')
+                            .eq('product_id', item.product_id)
+                            .single();
+                        
+                        if (!getError && product) {
+                            // Add back the quantity
+                            const newStock = (product.stock || 0) + item.quantity;
+                            
+                            // Update stock
+                            const { error: stockError } = await supabase
+                                .from('products')
+                                .update({ stock: newStock })
+                                .eq('product_id', item.product_id);
+                            
+                            if (!stockError) {
+                                console.log(`✅ Stock restaurado para producto ${item.product_id}: ${product.stock} → ${newStock}`);
+                            }
+                        }
                     }
                 }
+            }
+            
+            const { data, error } = await supabase
+                .from('orders')
+                .update({ status: newStatus })
+                .eq('order_id', orderId)
+                .select()
+                .single();
+
+            if (error) {
+                showToast('Error al actualizar el estado del pedido', 'error');
             } else {
-                showToast('Error al actualizar el pedido', 'error');
+                showToast(`Pedido marcado como: ${getStatusText(newStatus)}`, 'success');
+                await loadOrders();
             }
         } catch (error) {
             console.error('Error updating order status:', error);
-            showToast('Error al actualizar el pedido', 'error');
+            showToast('Error al actualizar el estado del pedido', 'error');
         } finally {
             hideLoading();
         }
     };
 
     window.completeOrder = function(orderId) {
-        window.updateOrderStatus(orderId, 'completed');
+        window.updateOrderStatus(orderId, 'entregado');
     };
 
     // Status filter functionality
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('filter-btn')) {
-            const container = e.target.closest('.tab-content');
-            const filterBtns = container.querySelectorAll('.filter-btn');
+            const filterBtns = document.querySelectorAll('.filter-btn');
             const status = e.target.getAttribute('data-status');
             
             // Update active filter button
             filterBtns.forEach(btn => btn.classList.remove('active'));
             e.target.classList.add('active');
             
-            // Filter orders
-            const activeTab = document.querySelector('.tab-button.active');
-            if (activeTab) {
-                const tabId = activeTab.getAttribute('data-tab');
-                let filteredOrders = orders.filter(order => order.type === (tabId === 'cocina' ? 'cocina' : 'barra'));
-                
-                if (status !== 'all') {
-                    filteredOrders = filteredOrders.filter(order => order.status === status);
-                }
-                
-                const containerId = tabId === 'cocina' ? 'kitchen-orders' : 'bar-orders';
-                renderOrders(filteredOrders, containerId);
-            }
+            // Update filter and re-render
+            currentStatusFilter = status;
+            filterAndRenderOrders();
+        }
+        
+        // Type filter functionality
+        if (e.target.classList.contains('type-filter-btn')) {
+            const typeFilterBtns = document.querySelectorAll('.type-filter-btn');
+            const type = e.target.getAttribute('data-type');
+            
+            // Update active type filter button
+            typeFilterBtns.forEach(btn => btn.classList.remove('active'));
+            e.target.classList.add('active');
+            
+            // Update filter and re-render
+            currentTypeFilter = type;
+            filterAndRenderOrders();
         }
     });
 
