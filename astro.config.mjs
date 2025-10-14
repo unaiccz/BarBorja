@@ -8,6 +8,10 @@ export default defineConfig({
   adapter: node({
     mode: 'standalone'
   }),
+  server: {
+    port: 4321,
+    host: true // Permite acceso desde cualquier IP (necesario para Render)
+  },
   vite: {
     define: {
       'import.meta.env.SUPABASE_URL': JSON.stringify(process.env.SUPABASE_URL),
