@@ -1,22 +1,13 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
-import node from '@astrojs/node';
 
 // https://astro.build/config
 export default defineConfig({
-  output: 'server', // Modo servidor para APIs
-  adapter: node({
-    mode: 'standalone'
-  }),
-  server: {
-    port: 4321,
-    host: true // Permite acceso desde cualquier IP (necesario para Render)
-  },
+  output: 'static', // Sitio estático - solo frontend
   vite: {
     define: {
-      'import.meta.env.SUPABASE_URL': JSON.stringify(process.env.SUPABASE_URL),
-      'import.meta.env.SUPABASE_KEY': JSON.stringify(process.env.SUPABASE_KEY),
-      'import.meta.env.STRIPE_SECRET_KEY': JSON.stringify(process.env.STRIPE_SECRET_KEY),
+      'import.meta.env.PUBLIC_SUPABASE_URL': JSON.stringify(process.env.PUBLIC_SUPABASE_URL),
+      'import.meta.env.PUBLIC_SUPABASE_KEY': JSON.stringify(process.env.PUBLIC_SUPABASE_KEY),
       'import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY': JSON.stringify(process.env.PUBLIC_STRIPE_PUBLISHABLE_KEY),
     }
   }
