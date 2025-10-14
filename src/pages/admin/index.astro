@@ -4,7 +4,13 @@ import Layout from '../../layouts/Layout.astro';
 
 <Layout title="Panel de Administración - BarBorja">
     <div class="admin-container">
-        <h1>Panel de Administración</h1>
+        <div class="admin-header">
+            <h1>Panel de Administración</h1>
+            <button class="btn-logout" onclick="logout()">
+                <span>🚪</span>
+                Cerrar Sesión
+            </button>
+        </div>
         
         <!-- Navigation Tabs -->
         <nav class="admin-nav">
@@ -66,6 +72,11 @@ import Layout from '../../layouts/Layout.astro';
                         <label for="allergens">Alérgenos:</label>
                         <textarea id="allergens" name="allergens" rows="2" placeholder="Separar con comas"></textarea>
                     </div>
+                    <div class="form-group">
+                        <label for="image_url">URL de Imagen:</label>
+                        <input type="url" id="image_url" name="image_url" placeholder="https://ejemplo.com/imagen.jpg">
+                        <small style="color: #666; display: block; margin-top: 5px;">Opcional: URL de la imagen del producto</small>
+                    </div>
                     <div class="form-actions">
                         <button type="submit" class="btn btn-success">Guardar</button>
                         <button type="button" class="btn btn-secondary" id="cancel-form">Cancelar</button>
@@ -100,6 +111,14 @@ import Layout from '../../layouts/Layout.astro';
                     <button class="filter-btn" data-status="listo">Listos</button>
                     <button class="filter-btn" data-status="entregado">Entregados</button>
                 </div>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="btn btn-warning" onclick="clearAllOrders()" style="flex: 1;">
+                        🗑️ Vaciar Pedidos
+                    </button>
+                    <button class="btn btn-info" onclick="printAllOrders()" style="flex: 1;">
+                        🖨️ Imprimir Todos
+                    </button>
+                </div>
             </div>
             <div class="type-filters" style="display: flex; gap: 10px; margin-bottom: 20px; justify-content: center;">
                 <button class="type-filter-btn active" data-type="all">📋 Todos</button>
@@ -120,6 +139,23 @@ import Layout from '../../layouts/Layout.astro';
 
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
+
+    <!-- Ticket Modal -->
+    <div id="ticket-modal" class="modal hidden">
+        <div class="modal-content ticket-modal-content">
+            <div class="ticket" id="printable-ticket">
+                <!-- Ticket content will be generated dynamically -->
+            </div>
+            <div class="ticket-actions">
+                <button class="btn btn-success" onclick="window.print()">
+                    🖨️ Imprimir
+                </button>
+                <button class="btn btn-secondary" id="close-ticket-modal">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
 </Layout>
 
 <style>
@@ -131,26 +167,46 @@ import Layout from '../../layouts/Layout.astro';
         min-height: 100vh;
     }
 
+    .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 40px;
+    }
+
     .admin-container h1 {
         color: #5d4e37;
-        margin-bottom: 40px;
-        text-align: center;
+        margin: 0;
         font-size: 3rem;
         font-family: 'Georgia', serif;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
         position: relative;
     }
 
-    .admin-container h1::after {
-        content: '';
-        position: absolute;
-        bottom: -10px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 100px;
-        height: 3px;
-        background: linear-gradient(90deg, transparent, #d4af37, transparent);
-        border-radius: 2px;
+    .btn-logout {
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #e74c3c, #c0392b);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+    }
+
+    .btn-logout:hover {
+        background: linear-gradient(135deg, #c0392b, #a93226);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+    }
+
+    .btn-logout span {
+        font-size: 18px;
     }
 
     /* Navigation Tabs */
@@ -285,6 +341,15 @@ import Layout from '../../layouts/Layout.astro';
         background: #e0a800;
     }
 
+    .btn-info {
+        background: #17a2b8;
+        color: white;
+    }
+
+    .btn-info:hover {
+        background: #138496;
+    }
+
     /* Form Styles */
     .form-container {
         background: white;
@@ -399,6 +464,29 @@ import Layout from '../../layouts/Layout.astro';
             #f2ede5 100%);
         border-radius: 25px;
         box-shadow: inset 0 0 20px rgba(212, 175, 55, 0.1);
+    }
+
+    .product-image {
+        width: 100%;
+        height: 200px;
+        overflow: hidden;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        background: linear-gradient(135deg, #f5f1e8, #faf7f0);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .product-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+
+    .product-card:hover .product-image img {
+        transform: scale(1.05);
     }
 
     .product-card {
@@ -1046,9 +1134,154 @@ import Layout from '../../layouts/Layout.astro';
             flex: 1;
         }
     }
+
+    /* Ticket Modal Styles */
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    }
+
+    .modal.hidden {
+        display: none;
+    }
+
+    .ticket-modal-content {
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .ticket {
+        background: white;
+        padding: 20px;
+        font-family: 'Courier New', monospace;
+        border: 2px dashed #333;
+        margin-bottom: 20px;
+        font-size: 13px;
+    }
+
+    .ticket-header {
+        text-align: center;
+        margin-bottom: 15px;
+        border-bottom: 2px solid #333;
+        padding-bottom: 10px;
+    }
+
+    .ticket-header h2 {
+        margin: 0;
+        font-size: 1.5rem;
+    }
+
+    .ticket-divider {
+        text-align: center;
+        color: #333;
+        margin: 10px 0;
+        font-size: 12px;
+    }
+
+    .ticket-info {
+        margin: 15px 0;
+    }
+
+    .ticket-info p {
+        margin: 5px 0;
+        font-size: 13px;
+    }
+
+    .ticket-items {
+        margin: 15px 0;
+    }
+
+    .ticket-item {
+        display: flex;
+        justify-content: space-between;
+        margin: 8px 0;
+        font-size: 13px;
+    }
+
+    .ticket-total {
+        display: flex;
+        justify-content: space-between;
+        font-size: 1.2rem;
+        font-weight: bold;
+        margin: 15px 0;
+        padding-top: 10px;
+        border-top: 2px solid #333;
+    }
+
+    .ticket-footer {
+        text-align: center;
+        margin-top: 15px;
+        font-size: 11px;
+        border-top: 2px solid #333;
+        padding-top: 10px;
+    }
+
+    .ticket-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .ticket-actions .btn {
+        flex: 1;
+    }
+
+    @media print {
+        body * {
+            visibility: hidden;
+        }
+        .ticket, .ticket * {
+            visibility: visible;
+        }
+        .ticket {
+            position: absolute;
+            left: 0;
+            top: 0;
+            border: none;
+        }
+        .ticket-actions {
+            display: none;
+        }
+    }
 </style>
 
 <script>
+    // Authentication check
+    const AUTH_KEY = 'barborja_admin_auth';
+    
+    // Check if user is authenticated
+    function checkAuth() {
+        const authToken = localStorage.getItem(AUTH_KEY);
+        if (!authToken) {
+            window.location.href = '/admin/login';
+            return false;
+        }
+        return true;
+    }
+    
+    // Logout function
+    window.logout = function() {
+        localStorage.removeItem(AUTH_KEY);
+        window.location.href = '/admin/login';
+    };
+    
+    // Check auth before initializing
+    if (!checkAuth()) {
+        throw new Error('Not authenticated');
+    }
+
     // Global variables
     let products = [];
     let orders = [];
@@ -1212,6 +1445,7 @@ import Layout from '../../layouts/Layout.astro';
         const typeInput = document.getElementById('type');
         const ingredientsInput = document.getElementById('ingredients');
         const allergensInput = document.getElementById('allergens');
+        const imageUrlInput = document.getElementById('image_url');
 
         if (nameInput) nameInput.value = product.name || '';
         if (descriptionInput) descriptionInput.value = product.description || '';
@@ -1220,6 +1454,7 @@ import Layout from '../../layouts/Layout.astro';
         if (typeInput) typeInput.value = product.type || '';
         if (ingredientsInput) ingredientsInput.value = product.ingredients || '';
         if (allergensInput) allergensInput.value = product.allergens || '';
+        if (imageUrlInput) imageUrlInput.value = product.image_url || '';
     }
 
     async function handleProductSubmit(e) {
@@ -1235,7 +1470,8 @@ import Layout from '../../layouts/Layout.astro';
             stock: parseInt(formData.get('stock')?.toString() || '0'),
             type: formData.get('type')?.toString() || '',
             ingredients: formData.get('ingredients')?.toString() || '',
-            allergens: formData.get('allergens')?.toString() || ''
+            allergens: formData.get('allergens')?.toString() || '',
+            image_url: formData.get('image_url')?.toString() || ''
         };
 
         showLoading();
@@ -1276,7 +1512,8 @@ import Layout from '../../layouts/Layout.astro';
                 productData.stock,
                 productData.type,
                 productData.ingredients,
-                productData.allergens
+                productData.allergens,
+                productData.image_url
             );
         } catch (error) {
             console.error('Error creating product:', error);
@@ -1349,7 +1586,11 @@ import Layout from '../../layouts/Layout.astro';
             return `
                 <div class="product-card">
                     <div class="stock-indicator ${stockStatus}"></div>
-                    
+                    ${product.image_url ? `
+                        <div class="product-image">
+                            <img src="${product.image_url}" alt="${product.name}" onerror="this.parentElement.style.display='none'">
+                        </div>
+                    ` : ''}
                     <div class="product-card-header">
                         <h3>${product.name}</h3>
                         <div class="type-badge ${product.type}">
@@ -1623,8 +1864,13 @@ import Layout from '../../layouts/Layout.astro';
             case 'listo':
                 return `<button class="btn btn-secondary" onclick="updateOrderStatus(${order.order_id}, 'entregado')">Marcar como Entregado</button>`;
             case 'entregado':
+                return `
+                    <button class="btn btn-info" onclick="printTicket(${order.order_id})">
+                        🖨️ Imprimir Ticket
+                    </button>
+                `;
             case 'cancelado':
-                return '<span class="status-final">Pedido finalizado</span>';
+                return '<span class="status-final">Pedido cancelado</span>';
             default:
                 return '';
         }
@@ -1757,4 +2003,288 @@ import Layout from '../../layouts/Layout.astro';
             toast.remove();
         }, 5000);
     }
+
+    // Función para imprimir tickets
+    window.printTicket = async function(orderId) {
+        try {
+            showLoading();
+            
+            // Importar supabase
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            // Obtener datos del pedido con sus items y productos
+            const { data: order, error } = await supabase
+                .from('orders')
+                .select(`
+                    *,
+                    order_items (
+                        quantity,
+                        price,
+                        products (
+                            name
+                        )
+                    )
+                `)
+                .eq('order_id', orderId)
+                .single();
+
+            if (error) throw error;
+            if (!order) throw new Error('Pedido no encontrado');
+
+            // Generar HTML del ticket
+            const ticketDate = new Date(order.created_at).toLocaleString('es-ES');
+            const ticketHTML = `
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0; font-size: 24px;">Bar Borja</h2>
+                    <p style="margin: 5px 0; font-size: 14px;">Ticket #${order.order_id}</p>
+                </div>
+                <div style="border-top: 2px dashed #333; border-bottom: 2px dashed #333; padding: 10px 0; margin: 10px 0;">
+                    <p style="margin: 5px 0;"><strong>Mesa:</strong> ${order.mesa_numero || 'N/A'}</p>
+                    <p style="margin: 5px 0;"><strong>Fecha:</strong> ${ticketDate}</p>
+                    <p style="margin: 5px 0;"><strong>Estado:</strong> ${order.status}</p>
+                </div>
+                <div style="margin: 15px 0;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #333;">
+                                <th style="text-align: left; padding: 5px;">Producto</th>
+                                <th style="text-align: center; padding: 5px;">Cant.</th>
+                                <th style="text-align: right; padding: 5px;">Precio</th>
+                                <th style="text-align: right; padding: 5px;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${order.order_items.map(item => `
+                                <tr>
+                                    <td style="padding: 5px;">${item.products.name}</td>
+                                    <td style="text-align: center; padding: 5px;">${item.quantity}</td>
+                                    <td style="text-align: right; padding: 5px;">${item.price.toFixed(2)}€</td>
+                                    <td style="text-align: right; padding: 5px;">${(item.quantity * item.price).toFixed(2)}€</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div style="border-top: 2px dashed #333; padding-top: 10px; margin-top: 10px;">
+                    <p style="text-align: right; font-size: 18px; margin: 5px 0;">
+                        <strong>TOTAL: ${order.total_amount.toFixed(2)}€</strong>
+                    </p>
+                </div>
+                <div style="text-align: center; margin-top: 20px; font-size: 12px;">
+                    <p>¡Gracias por su visita!</p>
+                </div>
+            `;
+
+            // Mostrar el modal con el ticket
+            const ticketModal = document.getElementById('ticket-modal');
+            const printableTicket = document.getElementById('printable-ticket');
+            
+            if (ticketModal && printableTicket) {
+                printableTicket.innerHTML = ticketHTML;
+                ticketModal.classList.remove('hidden');
+            }
+
+            hideLoading();
+        } catch (error) {
+            console.error('Error al cargar ticket:', error);
+            showToast('Error al cargar el ticket', 'error');
+            hideLoading();
+        }
+    };
+
+    // Listener para cerrar el modal
+    const closeTicketModal = document.getElementById('close-ticket-modal');
+    if (closeTicketModal) {
+        closeTicketModal.addEventListener('click', () => {
+            const ticketModal = document.getElementById('ticket-modal');
+            if (ticketModal) {
+                ticketModal.classList.add('hidden');
+                // Limpiar contenido
+                const printableTicket = document.getElementById('printable-ticket');
+                if (printableTicket) {
+                    printableTicket.innerHTML = '';
+                }
+            }
+        });
+    }
+
+    // Función para vaciar todos los pedidos
+    window.clearAllOrders = async function() {
+        if (!confirm('⚠️ ¿Estás seguro de que quieres eliminar TODOS los pedidos?\n\nEsta acción no se puede deshacer.')) {
+            return;
+        }
+
+        try {
+            showLoading();
+            
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            // Primero eliminar todos los order_items
+            const { error: itemsError } = await supabase
+                .from('order_items')
+                .delete()
+                .neq('order_item_id', 0); // Elimina todos los registros
+
+            if (itemsError) throw itemsError;
+
+            // Luego eliminar todos los orders
+            const { error: ordersError } = await supabase
+                .from('orders')
+                .delete()
+                .neq('order_id', 0); // Elimina todos los registros
+
+            if (ordersError) throw ordersError;
+
+            showToast('✅ Todos los pedidos han sido eliminados', 'success');
+            await loadOrders();
+            hideLoading();
+        } catch (error) {
+            console.error('Error al eliminar pedidos:', error);
+            showToast('❌ Error al eliminar los pedidos', 'error');
+            hideLoading();
+        }
+    };
+
+    // Función para imprimir todos los pedidos
+    window.printAllOrders = async function() {
+        try {
+            showLoading();
+            
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            // Obtener todos los pedidos con sus items y productos
+            const { data: orders, error } = await supabase
+                .from('orders')
+                .select(`
+                    *,
+                    order_items (
+                        quantity,
+                        price,
+                        products (
+                            name
+                        )
+                    )
+                `)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            if (!orders || orders.length === 0) {
+                showToast('No hay pedidos para imprimir', 'info');
+                hideLoading();
+                return;
+            }
+
+            // Generar HTML de todos los tickets
+            let allTicketsHTML = `
+                <div style="font-family: 'Courier New', monospace; max-width: 800px; margin: 0 auto;">
+                    <div style="text-align: center; margin-bottom: 30px; border-bottom: 3px solid #333; padding-bottom: 20px;">
+                        <h1 style="margin: 0; font-size: 32px;">Bar Borja</h1>
+                        <h2 style="margin: 10px 0; font-size: 20px;">Resumen de Pedidos</h2>
+                        <p style="margin: 5px 0;">Fecha: ${new Date().toLocaleString('es-ES')}</p>
+                        <p style="margin: 5px 0;">Total de Pedidos: ${orders.length}</p>
+                    </div>
+            `;
+
+            let totalGeneral = 0;
+
+            orders.forEach((order, index) => {
+                const ticketDate = new Date(order.created_at).toLocaleString('es-ES');
+                totalGeneral += order.total_amount;
+
+                allTicketsHTML += `
+                    <div style="border: 2px solid #333; padding: 15px; margin-bottom: 20px; page-break-inside: avoid;">
+                        <div style="text-align: center; border-bottom: 2px dashed #333; padding-bottom: 10px; margin-bottom: 10px;">
+                            <h3 style="margin: 0; font-size: 20px;">Pedido #${order.order_id}</h3>
+                        </div>
+                        <div style="margin: 10px 0;">
+                            <p style="margin: 5px 0;"><strong>Mesa:</strong> ${order.mesa_numero || 'N/A'}</p>
+                            <p style="margin: 5px 0;"><strong>Fecha:</strong> ${ticketDate}</p>
+                            <p style="margin: 5px 0;"><strong>Estado:</strong> ${order.status}</p>
+                            <p style="margin: 5px 0;"><strong>Tipo:</strong> ${order.order_type || 'N/A'}</p>
+                        </div>
+                        <div style="margin: 15px 0;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid #333;">
+                                        <th style="text-align: left; padding: 5px;">Producto</th>
+                                        <th style="text-align: center; padding: 5px;">Cant.</th>
+                                        <th style="text-align: right; padding: 5px;">Precio</th>
+                                        <th style="text-align: right; padding: 5px;">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${order.order_items.map(item => `
+                                        <tr>
+                                            <td style="padding: 5px;">${item.products.name}</td>
+                                            <td style="text-align: center; padding: 5px;">${item.quantity}</td>
+                                            <td style="text-align: right; padding: 5px;">${item.price.toFixed(2)}€</td>
+                                            <td style="text-align: right; padding: 5px;">${(item.quantity * item.price).toFixed(2)}€</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="border-top: 2px dashed #333; padding-top: 10px; margin-top: 10px;">
+                            <p style="text-align: right; font-size: 16px; margin: 5px 0;">
+                                <strong>TOTAL: ${order.total_amount.toFixed(2)}€</strong>
+                            </p>
+                        </div>
+                    </div>
+                `;
+            });
+
+            allTicketsHTML += `
+                    <div style="border: 3px solid #333; padding: 20px; margin-top: 30px; background: #f5f5f5; text-align: center;">
+                        <h2 style="margin: 0; font-size: 24px;">TOTAL GENERAL</h2>
+                        <p style="font-size: 28px; margin: 10px 0; font-weight: bold;">${totalGeneral.toFixed(2)}€</p>
+                        <p style="margin: 5px 0;">Total de Pedidos: ${orders.length}</p>
+                    </div>
+                </div>
+            `;
+
+            // Crear una nueva ventana para imprimir
+            const printWindow = window.open('', '_blank');
+            if (printWindow) {
+                printWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Resumen de Pedidos - Bar Borja</title>
+                        <style>
+                            @media print {
+                                body { margin: 0; padding: 20px; }
+                                .no-print { display: none; }
+                            }
+                            body {
+                                font-family: 'Courier New', monospace;
+                                margin: 20px;
+                            }
+                            @page {
+                                margin: 1cm;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="no-print" style="text-align: center; margin-bottom: 20px;">
+                            <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer; background: #27ae60; color: white; border: none; border-radius: 5px;">
+                                🖨️ Imprimir
+                            </button>
+                            <button onclick="window.close()" style="padding: 10px 20px; font-size: 16px; cursor: pointer; background: #95a5a6; color: white; border: none; border-radius: 5px; margin-left: 10px;">
+                                ✖️ Cerrar
+                            </button>
+                        </div>
+                        ${allTicketsHTML}
+                    </body>
+                    </html>
+                `);
+                printWindow.document.close();
+            }
+
+            hideLoading();
+        } catch (error) {
+            console.error('Error al imprimir pedidos:', error);
+            showToast('❌ Error al generar el resumen de pedidos', 'error');
+            hideLoading();
+        }
+    };
 </script>

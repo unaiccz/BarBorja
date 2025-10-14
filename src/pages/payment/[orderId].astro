@@ -1,0 +1,528 @@
+---
+export const prerender = false;
+import Layout from '../../layouts/Layout.astro';
+import { getOrderById } from '../../functions/orders.js';
+
+const { orderId } = Astro.params;
+const order = await getOrderById(parseInt(orderId));
+
+if (!order) {
+    return Astro.redirect('/');
+}
+---
+
+<Layout title={`Pagar Pedido #${orderId} - BarBorja`}>
+    <div class="payment-container">
+        <div class="payment-card">
+            <div class="payment-header">
+                <h1>💳 Pagar Pedido</h1>
+                <p>Pedido #{orderId} - Mesa {order.table_number}</p>
+            </div>
+
+            <div class="order-summary">
+                <h2>Resumen del Pedido</h2>
+                <div class="items-list">
+                    {order.order_items?.map((item: any) => (
+                        <div class="item">
+                            <span>{item.quantity}x {item.products?.name}</span>
+                            <span>{(item.quantity * item.price).toFixed(2)}€</span>
+                        </div>
+                    ))}
+                </div>
+                <div class="total">
+                    <strong>Total:</strong>
+                    <strong>{order.total_amount.toFixed(2)}€</strong>
+                </div>
+            </div>
+
+            <div class="payment-methods">
+                <h2>Método de Pago</h2>
+                
+                <button class="payment-btn card-payment" id="card-payment-btn">
+                    <div class="btn-content">
+                        <span class="icon">💳</span>
+                        <div>
+                            <div class="btn-title">Pagar con Tarjeta</div>
+                            <div class="btn-subtitle">Stripe - Pago seguro</div>
+                        </div>
+                    </div>
+                </button>
+
+                <button class="payment-btn bar-payment" id="bar-payment-btn">
+                    <div class="btn-content">
+                        <span class="icon">🍺</span>
+                        <div>
+                            <div class="btn-title">Pagar en Barra</div>
+                            <div class="btn-subtitle">Efectivo o tarjeta en caja</div>
+                        </div>
+                    </div>
+                </button>
+            </div>
+
+            <button class="btn-back" onclick="window.history.back()">
+                ← Volver
+            </button>
+        </div>
+    </div>
+
+    <!-- Stripe Payment Modal -->
+    <div id="stripe-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>💳 Pago con Tarjeta</h3>
+                <button class="close-modal" id="close-stripe-modal">×</button>
+            </div>
+            <div id="stripe-payment-element"></div>
+            <button id="submit-payment" class="btn-submit">
+                Pagar {order.total_amount.toFixed(2)}€
+            </button>
+        </div>
+    </div>
+
+    <!-- Ticket Modal -->
+    <div id="ticket-modal" class="modal hidden">
+        <div class="modal-content ticket-content">
+            <div class="ticket" id="printable-ticket">
+                <div class="ticket-header">
+                    <h2>🍽️ BarBorja</h2>
+                    <p>Ticket de Compra</p>
+                </div>
+                <div class="ticket-divider">━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+                <div class="ticket-info">
+                    <p><strong>Pedido:</strong> #{orderId}</p>
+                    <p><strong>Mesa:</strong> {order.table_number}</p>
+                    <p><strong>Fecha:</strong> {new Date().toLocaleString('es-ES')}</p>
+                    <p><strong>Método:</strong> <span id="payment-method-display"></span></p>
+                </div>
+                <div class="ticket-divider">━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+                <div class="ticket-items">
+                    {order.order_items?.map((item: any) => (
+                        <div class="ticket-item">
+                            <span>{item.quantity}x {item.products?.name}</span>
+                            <span>{(item.quantity * item.price).toFixed(2)}€</span>
+                        </div>
+                    ))}
+                </div>
+                <div class="ticket-divider">━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+                <div class="ticket-total">
+                    <strong>TOTAL:</strong>
+                    <strong>{order.total_amount.toFixed(2)}€</strong>
+                </div>
+                <div class="ticket-divider">━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+                <div class="ticket-footer">
+                    <p>¡Gracias por su visita!</p>
+                    <p>www.barborja.com</p>
+                </div>
+            </div>
+            <div class="ticket-actions">
+                <button class="btn-print" onclick="window.print()">
+                    🖨️ Imprimir Ticket
+                </button>
+                <button class="btn-close" id="close-ticket-modal">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</Layout>
+
+<style>
+    .payment-container {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #fdf6e3, #f4f1e8);
+        padding: 40px 20px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .payment-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        padding: 40px;
+        max-width: 600px;
+        width: 100%;
+    }
+
+    .payment-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .payment-header h1 {
+        color: #2c3e50;
+        margin: 0 0 10px 0;
+        font-size: 2rem;
+    }
+
+    .payment-header p {
+        color: #7f8c8d;
+        margin: 0;
+    }
+
+    .order-summary {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 30px;
+    }
+
+    .order-summary h2 {
+        margin: 0 0 15px 0;
+        color: #2c3e50;
+        font-size: 1.2rem;
+    }
+
+    .items-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+
+    .item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .total {
+        display: flex;
+        justify-content: space-between;
+        padding-top: 15px;
+        border-top: 2px solid #2c3e50;
+        font-size: 1.3rem;
+        color: #2c3e50;
+    }
+
+    .payment-methods h2 {
+        margin: 0 0 20px 0;
+        color: #2c3e50;
+        font-size: 1.2rem;
+        text-align: center;
+    }
+
+    .payment-btn {
+        width: 100%;
+        padding: 20px;
+        border: 2px solid #e0e0e0;
+        border-radius: 12px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 15px;
+    }
+
+    .payment-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-payment {
+        border-color: #667eea;
+    }
+
+    .card-payment:hover {
+        background: #f0f3ff;
+        border-color: #667eea;
+    }
+
+    .bar-payment {
+        border-color: #27ae60;
+    }
+
+    .bar-payment:hover {
+        background: #f0fff4;
+        border-color: #27ae60;
+    }
+
+    .btn-content {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .btn-content .icon {
+        font-size: 2.5rem;
+    }
+
+    .btn-title {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #2c3e50;
+        text-align: left;
+    }
+
+    .btn-subtitle {
+        font-size: 0.9rem;
+        color: #7f8c8d;
+        text-align: left;
+    }
+
+    .btn-back {
+        width: 100%;
+        padding: 12px;
+        background: #95a5a6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        margin-top: 20px;
+        transition: all 0.3s ease;
+    }
+
+    .btn-back:hover {
+        background: #7f8c8d;
+    }
+
+    /* Modal Styles */
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    .modal.hidden {
+        display: none;
+    }
+
+    .modal-content {
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        color: #2c3e50;
+    }
+
+    .close-modal {
+        background: none;
+        border: none;
+        font-size: 2rem;
+        cursor: pointer;
+        color: #95a5a6;
+        line-height: 1;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+    }
+
+    .close-modal:hover {
+        color: #e74c3c;
+    }
+
+    .btn-submit {
+        width: 100%;
+        padding: 15px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 20px;
+    }
+
+    .btn-submit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    /* Ticket Styles */
+    .ticket-content {
+        max-width: 400px;
+    }
+
+    .ticket {
+        background: white;
+        padding: 20px;
+        font-family: 'Courier New', monospace;
+        border: 2px dashed #333;
+        margin-bottom: 20px;
+    }
+
+    .ticket-header {
+        text-align: center;
+        margin-bottom: 15px;
+    }
+
+    .ticket-header h2 {
+        margin: 0;
+        font-size: 1.5rem;
+    }
+
+    .ticket-header p {
+        margin: 5px 0 0 0;
+        font-size: 0.9rem;
+    }
+
+    .ticket-divider {
+        text-align: center;
+        color: #333;
+        margin: 10px 0;
+    }
+
+    .ticket-info p {
+        margin: 5px 0;
+        font-size: 0.9rem;
+    }
+
+    .ticket-items {
+        margin: 15px 0;
+    }
+
+    .ticket-item {
+        display: flex;
+        justify-content: space-between;
+        margin: 8px 0;
+        font-size: 0.9rem;
+    }
+
+    .ticket-total {
+        display: flex;
+        justify-content: space-between;
+        font-size: 1.2rem;
+        margin: 15px 0;
+    }
+
+    .ticket-footer {
+        text-align: center;
+        margin-top: 15px;
+        font-size: 0.85rem;
+    }
+
+    .ticket-footer p {
+        margin: 5px 0;
+    }
+
+    .ticket-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn-print,
+    .btn-close {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .btn-print {
+        background: #27ae60;
+        color: white;
+    }
+
+    .btn-print:hover {
+        background: #229954;
+    }
+
+    .btn-close {
+        background: #95a5a6;
+        color: white;
+    }
+
+    .btn-close:hover {
+        background: #7f8c8d;
+    }
+
+    @media print {
+        body * {
+            visibility: hidden;
+        }
+        .ticket, .ticket * {
+            visibility: visible;
+        }
+        .ticket {
+            position: absolute;
+            left: 0;
+            top: 0;
+            border: none;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .payment-card {
+            padding: 20px;
+        }
+    }
+</style>
+
+<script define:vars={{ orderId, orderData: order }}>
+    // Payment handling
+    const cardPaymentBtn = document.getElementById('card-payment-btn');
+    const barPaymentBtn = document.getElementById('bar-payment-btn');
+    const stripeModal = document.getElementById('stripe-modal');
+    const ticketModal = document.getElementById('ticket-modal');
+    const closeStripeModal = document.getElementById('close-stripe-modal');
+    const closeTicketModal = document.getElementById('close-ticket-modal');
+    const paymentMethodDisplay = document.getElementById('payment-method-display');
+
+    // Card payment (Stripe simulation)
+    cardPaymentBtn?.addEventListener('click', () => {
+        // In production, you would initialize Stripe here
+        // For now, we'll simulate it
+        stripeModal?.classList.remove('hidden');
+    });
+
+    closeStripeModal?.addEventListener('click', () => {
+        stripeModal?.classList.add('hidden');
+    });
+
+    // Simulate Stripe payment
+    const submitPayment = document.getElementById('submit-payment');
+    submitPayment?.addEventListener('click', async () => {
+        submitPayment.textContent = 'Procesando...';
+        submitPayment.disabled = true;
+
+        // Simulate payment processing
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        stripeModal?.classList.add('hidden');
+        paymentMethodDisplay.textContent = 'Tarjeta de crédito';
+        showTicket();
+    });
+
+    // Bar payment
+    barPaymentBtn?.addEventListener('click', () => {
+        paymentMethodDisplay.textContent = 'Pago en barra';
+        showTicket();
+    });
+
+    closeTicketModal?.addEventListener('click', () => {
+        ticketModal?.classList.add('hidden');
+        // Redirect to mesa page
+        window.location.href = `/mesa/${orderData.table_number}`;
+    });
+
+    function showTicket() {
+        ticketModal?.classList.remove('hidden');
+    }
+</script>

@@ -41,7 +41,7 @@ export async function getProductById(id) {
 
     return data;
 }
-export async function createProduct(name, description, price, stock, type, ingredients, allergens) {
+export async function createProduct(name, description, price, stock, type, ingredients, allergens, image_url) {
     const { data, error } = await supabase
         .from('products')
         .insert({
@@ -51,7 +51,8 @@ export async function createProduct(name, description, price, stock, type, ingre
             stock,
             type,
             ingredients,
-            allergens
+            allergens,
+            image_url
         })
         .select()
         .single();
