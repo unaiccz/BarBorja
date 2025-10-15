@@ -805,7 +805,13 @@ if (isNaN(mesaNumero) || mesaNumero <= 0) {
     }
 </style>
 
-<script define:vars={{ mesaNumero }}>
+<script>
+    import { supabase } from '../../lib/supabase.js';
+    
+    // Get mesa number from current page
+    const urlPath = window.location.pathname;
+    const mesaNumero = parseInt(urlPath.match(/\/mesa\/(\d+)/)?.[1] || '0');
+    
     let cart = [];
     let cartVisible = true;
 
@@ -1094,8 +1100,6 @@ if (isNaN(mesaNumero) || mesaNumero <= 0) {
     // Load order history
     async function loadOrderHistory() {
         try {
-            const { supabase } = await import('/src/db/supabase.js');
-            
             const { data: orders, error } = await supabase
                 .from('orders')
                 .select(`
