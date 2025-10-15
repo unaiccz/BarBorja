@@ -1718,6 +1718,8 @@ import Layout from '../../layouts/Layout.astro';
                     estimated_time,
                     total_amount,
                     created_at,
+                    is_paid,
+                    payment_method,
                     order_items (
                         order_item_id,
                         quantity,
@@ -1794,7 +1796,7 @@ import Layout from '../../layouts/Layout.astro';
         }
 
         const ordersHTML = ordersToRender.map(order => `
-            <div class="order-card ${order.status}">
+            <div class="order-card ${order.status} ${order.is_paid ? 'paid' : ''}">
                 <div class="order-header">
                     <div class="order-number">Pedido #${order.order_id}</div>
                     <div class="order-status ${order.status}">
@@ -1805,6 +1807,10 @@ import Layout from '../../layouts/Layout.astro';
                     ${order.table_number ? `<p><strong>Mesa:</strong> ${order.table_number}</p>` : ''}
                     <p><strong>Tipo:</strong> ${getOrderTypeFromProducts(order.order_items)}</p>
                     <p><strong>Hora:</strong> ${new Date(order.created_at).toLocaleTimeString()}</p>
+                    <p style="${order.is_paid ? 'color: #27ae60; font-weight: bold;' : 'color: #e74c3c; font-weight: bold;'}">
+                        <strong>💳 Pago:</strong> ${order.is_paid ? '✅ Pagado' : '⏳ Pendiente'}
+                        ${order.is_paid && order.payment_method ? ` (${order.payment_method})` : ''}
+                    </p>
                 </div>
                 <div class="order-items">
                     ${order.order_items ? order.order_items.map(item => `
@@ -1852,30 +1858,48 @@ import Layout from '../../layouts/Layout.astro';
 
 
     function getOrderActions(order) {
+        let actions = '';
+        
+        // Botón de confirmar pago en barra (solo si no está pagado y status es entregado o pagado)
+        if (!order.is_paid && (order.status === 'entregado' || order.status === 'pagado')) {
+            actions += `
+                <button class="btn btn-warning" onclick="confirmBarPayment(${order.order_id})" style="margin-bottom: 5px; width: 100%;">
+                    💵 Confirmar Pago en Barra
+                </button>
+            `;
+        }
+        
+        // Botones normales de estado
         switch (order.status) {
             case 'pendiente':
-                return `
+                actions += `
                     <button class="btn btn-primary" onclick="updateOrderStatus(${order.order_id}, 'preparando')">Iniciar Preparación</button>
                     <button class="btn btn-danger" onclick="updateOrderStatus(${order.order_id}, 'cancelado')">Cancelar</button>
                 `;
+                break;
             case 'preparando':
-                return `
+                actions += `
                     <button class="btn btn-success" onclick="updateOrderStatus(${order.order_id}, 'listo')">Marcar como Listo</button>
                     <button class="btn btn-danger" onclick="updateOrderStatus(${order.order_id}, 'cancelado')">Cancelar</button>
                 `;
+                break;
             case 'listo':
-                return `<button class="btn btn-secondary" onclick="updateOrderStatus(${order.order_id}, 'entregado')">Marcar como Entregado</button>`;
+                actions += `<button class="btn btn-secondary" onclick="updateOrderStatus(${order.order_id}, 'entregado')">Marcar como Entregado</button>`;
+                break;
             case 'entregado':
-                return `
+            case 'pagado':
+                actions += `
                     <button class="btn btn-info" onclick="printTicket(${order.order_id})">
                         🖨️ Imprimir Ticket
                     </button>
                 `;
+                break;
             case 'cancelado':
-                return '<span class="status-final">Pedido cancelado</span>';
-            default:
-                return '';
+                actions += '<span class="status-final">Pedido cancelado</span>';
+                break;
         }
+        
+        return actions;
     }
 
     // Order actions
@@ -2109,6 +2133,37 @@ import Layout from '../../layouts/Layout.astro';
             }
         });
     }
+
+    // Función para confirmar pago en barra desde admin
+    window.confirmBarPayment = async function(orderId) {
+        if (!confirm('¿Confirmar que el cliente ha pagado en barra?')) {
+            return;
+        }
+
+        try {
+            showLoading();
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            const { error } = await supabase
+                .from('orders')
+                .update({ 
+                    is_paid: true,
+                    payment_method: 'efectivo',
+                    status: 'pagado'
+                })
+                .eq('order_id', orderId);
+
+            if (error) throw error;
+
+            showToast('✅ Pago confirmado correctamente', 'success');
+            await loadOrders();
+            hideLoading();
+        } catch (error) {
+            console.error('Error al confirmar pago:', error);
+            showToast('Error al confirmar el pago', 'error');
+            hideLoading();
+        }
+    };
 
     // Función para vaciar todos los pedidos
     window.clearAllOrders = async function() {

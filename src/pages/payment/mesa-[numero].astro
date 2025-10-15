@@ -39,7 +39,10 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
             <div id="payment-options" class="payment-options" style="display: none;">
                 <h2>Método de Pago</h2>
                 <div class="payment-buttons">
-                    <button class="btn btn-primary" id="bar-payment-btn">
+                    <button class="btn btn-primary" id="card-payment-btn">
+                        💳 Pagar con Tarjeta
+                    </button>
+                    <button class="btn btn-success" id="bar-payment-btn">
                         💵 Pagar en Barra
                     </button>
                 </div>
@@ -51,13 +54,34 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
             </div>
         </div>
 
+        <!-- Stripe Payment Modal -->
+        <div id="stripe-modal" class="modal hidden">
+            <div class="modal-content stripe-modal">
+                <div class="modal-header">
+                    <h2>💳 Pago con Tarjeta</h2>
+                    <button class="close-btn" id="close-stripe-modal">✕</button>
+                </div>
+                <div class="stripe-info">
+                    <p>Total a pagar: <strong id="stripe-total">0.00€</strong></p>
+                </div>
+                <div id="stripe-card-element" class="stripe-element">
+                    <!-- Stripe Card Element will be mounted here -->
+                </div>
+                <div class="stripe-actions">
+                    <button class="btn btn-primary" id="submit-payment">
+                        Pagar
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Success Modal -->
         <div id="success-modal" class="modal hidden">
             <div class="modal-content">
                 <h2>✅ Pago Registrado</h2>
                 <p>Gracias por tu visita</p>
                 <div class="modal-actions">
-                    <button class="btn btn-primary" onclick="window.location.href='/mesa/{numero}'">
+                    <button class="btn btn-primary" id="back-to-table-btn">
                         Volver a la Mesa
                     </button>
                 </div>
@@ -234,6 +258,142 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
         box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
     }
 
+    .btn-success {
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+        color: white;
+    }
+
+    .btn-success:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(39, 174, 96, 0.4);
+    }
+
+    .btn-secondary {
+        background: #95a5a6;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #7f8c8d;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .no-orders {
+        text-align: center;
+        padding: 40px;
+    }
+
+    .no-orders p {
+        font-size: 1.2rem;
+        color: #e74c3c;
+        margin-bottom: 20px;
+    }
+
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    }
+
+    .modal.hidden {
+        display: none;
+    }
+
+    .modal-content {
+        background: white;
+        padding: 40px;
+        border-radius: 15px;
+        text-align: center;
+        max-width: 400px;
+        width: 90%;
+    }
+
+    .stripe-modal {
+        max-width: 500px;
+        text-align: left;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        color: #2c3e50;
+    }
+
+    .close-btn {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #95a5a6;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .close-btn:hover {
+        color: #e74c3c;
+    }
+
+    .stripe-info {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .stripe-info strong {
+        font-size: 1.5rem;
+        color: #667eea;
+    }
+
+    .stripe-element {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        background: #fafafa;
+    }
+
+    .stripe-actions {
+        margin-top: 20px;
+    }
+
+    .stripe-actions .btn {
+        width: 100%;
+    }
+
+    .modal-content h2 {
+        color: #27ae60;
+        margin-bottom: 15px;
+    }
+
+    .modal-actions {
+        margin-top: 20px;
+    }
+
     .btn-secondary {
         background: #95a5a6;
         color: white;
@@ -300,6 +460,8 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
     }
 </style>
 
+<script is:inline src="https://js.stripe.com/v3/"></script>
+
 <script>
     import { supabase } from '../../lib/supabase.js';
 
@@ -309,6 +471,9 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
     
     let orders = [];
     let totalAmount = 0;
+    let stripe = null;
+    let elements = null;
+    let cardElement = null;
 
     async function loadOrders() {
         const loadingEl = document.getElementById('loading-orders');
@@ -325,6 +490,7 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
                     status,
                     total_amount,
                     created_at,
+                    is_paid,
                     order_items (
                         quantity,
                         price,
@@ -335,7 +501,8 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
                     )
                 `)
                 .eq('table_number', mesaNumero)
-                .eq('status', 'entregado')
+                .eq('is_paid', false)
+                .neq('status', 'cancelado')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -412,27 +579,261 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
     async function processBarPayment() {
         try {
-            // Update all orders to 'pagado'
+            // Mark orders as pending bar payment (status = 'pagado' but is_paid = false)
             const orderIds = orders.map(o => o.order_id);
             
             const { error } = await supabase
                 .from('orders')
-                .update({ status: 'pagado' })
+                .update({ 
+                    status: 'pagado',
+                    payment_method: 'efectivo'
+                })
                 .in('order_id', orderIds);
 
             if (error) throw error;
 
-            showSuccessModal();
+            // Show ticket immediately without marking as paid
+            showBarPaymentTicket();
         } catch (error) {
             console.error('Error processing payment:', error);
             alert('Error al procesar el pago. Por favor, intenta de nuevo.');
         }
     }
 
+    function showBarPaymentTicket() {
+        // Generate ticket HTML
+        let ticketHTML = `
+            <div style="font-family: 'Courier New', monospace; max-width: 300px; margin: 0 auto; background: white; padding: 20px; border: 2px solid #333;">
+                <div style="text-align: center; border-bottom: 2px dashed #333; padding-bottom: 10px; margin-bottom: 10px;">
+                    <h2 style="margin: 0; font-size: 20px;">BAR BORJA</h2>
+                    <p style="margin: 5px 0; font-size: 12px;">Ticket de Pago</p>
+                    <p style="margin: 5px 0; font-size: 11px;">${new Date().toLocaleString('es-ES')}</p>
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <p style="margin: 5px 0; font-weight: bold;">Mesa: ${mesaNumero}</p>
+                    <p style="margin: 5px 0; font-weight: bold;">Método: Efectivo (Barra)</p>
+                </div>
+                
+                <div style="border-top: 2px dashed #333; border-bottom: 2px dashed #333; padding: 10px 0; margin: 10px 0;">
+        `;
+
+        orders.forEach(order => {
+            order.order_items?.forEach(item => {
+                const productName = item.products?.name || 'Producto';
+                const quantity = item.quantity;
+                const price = item.price;
+                const total = quantity * price;
+                
+                ticketHTML += `
+                    <div style="display: flex; justify-content: space-between; margin: 5px 0; font-size: 13px;">
+                        <span>${quantity}x ${productName}</span>
+                        <span>${total.toFixed(2)}€</span>
+                    </div>
+                `;
+            });
+        });
+
+        ticketHTML += `
+                </div>
+                
+                <div style="margin-top: 15px; padding-top: 10px; border-top: 2px solid #333;">
+                    <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: bold;">
+                        <span>TOTAL:</span>
+                        <span>${totalAmount.toFixed(2)}€</span>
+                    </div>
+                </div>
+                
+                <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 5px; padding: 10px; margin-top: 15px;">
+                    <p style="margin: 0; font-size: 12px; color: #856404; text-align: center; font-weight: bold;">
+                        ⚠️ PENDIENTE DE CONFIRMACIÓN
+                    </p>
+                    <p style="margin: 5px 0 0 0; font-size: 11px; color: #856404; text-align: center;">
+                        Presente este ticket en barra para confirmar el pago
+                    </p>
+                </div>
+                
+                <div style="text-align: center; margin-top: 20px; padding-top: 15px; border-top: 2px dashed #333;">
+                    <p style="margin: 5px 0; font-size: 12px;">¡Gracias por su visita!</p>
+                    <p style="margin: 5px 0; font-size: 11px;">www.barborja.com</p>
+                </div>
+            </div>
+        `;
+
+        // Create and show modal with ticket
+        const modal = document.createElement('div');
+        modal.id = 'ticket-modal';
+        modal.className = 'modal';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h2>🧾 Ticket de Pago</h2>
+                    <button class="close-btn" onclick="document.getElementById('ticket-modal').remove()">✕</button>
+                </div>
+                <div id="printable-ticket" style="background: white; padding: 20px; margin: 20px 0;">
+                    ${ticketHTML}
+                </div>
+                <div class="modal-actions" style="display: flex; gap: 10px; justify-content: center;">
+                    <button class="btn btn-primary" onclick="printTicket()">
+                        🖨️ Imprimir Ticket
+                    </button>
+                    <button class="btn btn-secondary" id="back-to-table-btn-ticket">
+                        Volver a la Mesa
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        
+        // Add event listener for back button
+        document.getElementById('back-to-table-btn-ticket').addEventListener('click', () => {
+            window.location.href = `/mesa/${mesaNumero}`;
+        });
+    }
+
+    function printTicket() {
+        const printContents = document.getElementById('printable-ticket').innerHTML;
+        const originalContents = document.body.innerHTML;
+
+        document.body.innerHTML = printContents;
+        window.print();
+        document.body.innerHTML = originalContents;
+        
+        // Reload to restore functionality
+        window.location.reload();
+    }
+
     function showSuccessModal() {
         const modal = document.getElementById('success-modal');
         if (modal) {
             modal.classList.remove('hidden');
+        }
+    }
+
+    async function initializeStripe() {
+        try {
+            // Initialize Stripe
+            const stripeKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
+            if (!stripeKey) {
+                throw new Error('Stripe key not configured');
+            }
+
+            stripe = window.Stripe(stripeKey);
+
+            // Create card element
+            elements = stripe.elements();
+            cardElement = elements.create('card', {
+                style: {
+                    base: {
+                        fontSize: '16px',
+                        color: '#32325d',
+                        '::placeholder': {
+                            color: '#aab7c4'
+                        }
+                    },
+                    invalid: {
+                        color: '#fa755a'
+                    }
+                }
+            });
+
+            // Mount the card element
+            cardElement.mount('#stripe-card-element');
+
+            // Update total in modal
+            const stripeTotalEl = document.getElementById('stripe-total');
+            if (stripeTotalEl) {
+                stripeTotalEl.textContent = totalAmount.toFixed(2) + '€';
+            }
+
+            // Show the modal
+            const modal = document.getElementById('stripe-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+
+        } catch (error) {
+            console.error('Error initializing Stripe:', error);
+            alert('Error al inicializar el pago con tarjeta. Por favor, intenta de nuevo.');
+        }
+    }
+
+    async function processCardPayment() {
+        if (!stripe || !cardElement) {
+            alert('Stripe no está inicializado correctamente');
+            return;
+        }
+
+        const submitBtn = document.getElementById('submit-payment');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Procesando...';
+        }
+
+        try {
+            // Create payment method
+            const { error, paymentMethod } = await stripe.createPaymentMethod({
+                type: 'card',
+                card: cardElement,
+            });
+
+            if (error) {
+                throw new Error(error.message);
+            }
+
+            // Payment method created successfully
+            // Update orders to 'pagado' status with is_paid flag
+            const orderIds = orders.map(o => o.order_id);
+            
+            const { error: updateError } = await supabase
+                .from('orders')
+                .update({ 
+                    status: 'pagado',
+                    payment_method: 'tarjeta',
+                    is_paid: true
+                })
+                .in('order_id', orderIds);
+
+            if (updateError) throw updateError;
+
+            // Close Stripe modal
+            const stripeModal = document.getElementById('stripe-modal');
+            if (stripeModal) {
+                stripeModal.classList.add('hidden');
+            }
+
+            // Clean up Stripe elements
+            if (cardElement) {
+                cardElement.unmount();
+                cardElement = null;
+            }
+
+            // Show success modal
+            showSuccessModal();
+
+        } catch (error) {
+            console.error('Error processing card payment:', error);
+            alert(`Error al procesar el pago: ${error.message}`);
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Pagar';
+            }
+        }
+    }
+
+    function closeStripeModal() {
+        const modal = document.getElementById('stripe-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+
+        // Clean up card element
+        if (cardElement) {
+            cardElement.unmount();
+            cardElement = null;
         }
     }
 
@@ -444,7 +845,30 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
         if (barPaymentBtn) {
             barPaymentBtn.addEventListener('click', processBarPayment);
         }
+
+        const cardPaymentBtn = document.getElementById('card-payment-btn');
+        if (cardPaymentBtn) {
+            cardPaymentBtn.addEventListener('click', initializeStripe);
+        }
+
+        const submitPaymentBtn = document.getElementById('submit-payment');
+        if (submitPaymentBtn) {
+            submitPaymentBtn.addEventListener('click', processCardPayment);
+        }
+
+        const closeStripeBtn = document.getElementById('close-stripe-modal');
+        if (closeStripeBtn) {
+            closeStripeBtn.addEventListener('click', closeStripeModal);
+        }
+
+        const backToTableBtn = document.getElementById('back-to-table-btn');
+        if (backToTableBtn) {
+            backToTableBtn.addEventListener('click', () => {
+                window.location.href = `/mesa/${mesaNumero}`;
+            });
+        }
     });
+
 </script>
 
 </Layout>

@@ -23,6 +23,9 @@ if (isNaN(mesaNumero) || mesaNumero <= 0) {
     <div class="mesa-header">
         <h1>Mesa {numero}</h1>
         <p class="mesa-subtitle">Bienvenidos a BarBorja</p>
+        <a href={`/payment/mesa-${numero}`} class="btn-payment">
+            💳 Ir a Pagar
+        </a>
     </div>
 
     <div class="carta-container">
@@ -129,6 +132,7 @@ if (isNaN(mesaNumero) || mesaNumero <= 0) {
         background: linear-gradient(135deg, #2c3e50, #34495e);
         color: white;
         margin-bottom: 30px;
+        position: relative;
     }
 
     .mesa-header h1 {
@@ -139,8 +143,32 @@ if (isNaN(mesaNumero) || mesaNumero <= 0) {
 
     .mesa-subtitle {
         font-size: 1.2rem;
-        margin: 10px 0 0 0;
+        margin: 10px 0 15px 0;
         opacity: 0.9;
+    }
+
+    .btn-payment {
+        display: inline-block;
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+        color: white;
+        padding: 12px 30px;
+        border-radius: 25px;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 1.1rem;
+        box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+        transition: all 0.3s ease;
+        margin-top: 10px;
+    }
+
+    .btn-payment:hover {
+        background: linear-gradient(135deg, #229954, #27ae60);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
+    }
+
+    .btn-payment:active {
+        transform: translateY(0);
     }
 
     .carta-container {
