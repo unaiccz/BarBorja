@@ -1,0 +1,450 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+export async function getStaticPaths() {
+    const paths = [];
+    for (let i = 1; i <= 50; i++) {
+        paths.push({ params: { numero: i.toString() } });
+    }
+    return paths;
+}
+
+const { numero } = Astro.params;
+const mesaNumero = parseInt(numero || '0');
+
+if (isNaN(mesaNumero) || mesaNumero <= 0) {
+    return Astro.redirect('/');
+}
+
+const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
+---
+
+<Layout title={`Pagar Mesa ${numero} - BarBorja`}>
+    <div class="payment-container">
+        <div class="payment-card">
+            <div class="payment-header">
+                <h1>💳 Pagar Cuenta</h1>
+                <p>Mesa {numero}</p>
+            </div>
+
+            <div id="loading-orders" class="loading-section">
+                <div class="spinner"></div>
+                <p>Cargando pedidos...</p>
+            </div>
+
+            <div id="order-summary" class="order-summary" style="display: none;">
+                <!-- Orders will be loaded here -->
+            </div>
+
+            <div id="payment-options" class="payment-options" style="display: none;">
+                <h2>Método de Pago</h2>
+                <div class="payment-buttons">
+                    <button class="btn btn-primary" id="bar-payment-btn">
+                        💵 Pagar en Barra
+                    </button>
+                </div>
+            </div>
+
+            <div id="no-orders" class="no-orders" style="display: none;">
+                <p>⚠️ No hay pedidos entregados para pagar</p>
+                <a href="/mesa/{numero}" class="btn btn-secondary">Volver a la Mesa</a>
+            </div>
+        </div>
+
+        <!-- Success Modal -->
+        <div id="success-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>✅ Pago Registrado</h2>
+                <p>Gracias por tu visita</p>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" onclick="window.location.href='/mesa/{numero}'">
+                        Volver a la Mesa
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</Layout>
+
+<style>
+    .payment-container {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .payment-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        max-width: 600px;
+        width: 100%;
+        padding: 30px;
+    }
+
+    .payment-header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .payment-header h1 {
+        margin: 0 0 10px 0;
+        color: #2c3e50;
+        font-size: 2rem;
+    }
+
+    .payment-header p {
+        margin: 0;
+        color: #7f8c8d;
+        font-size: 1.2rem;
+    }
+
+    .loading-section {
+        text-align: center;
+        padding: 40px;
+    }
+
+    .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .order-summary {
+        margin-bottom: 30px;
+    }
+
+    .order-summary h2 {
+        color: #2c3e50;
+        margin-bottom: 20px;
+        font-size: 1.5rem;
+    }
+
+    .order-group {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .order-group-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .order-badge {
+        background: #667eea;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: bold;
+    }
+
+    .order-time {
+        color: #7f8c8d;
+        font-size: 0.9rem;
+    }
+
+    .items-list {
+        margin-top: 10px;
+    }
+
+    .item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .item:last-child {
+        border-bottom: none;
+    }
+
+    .total-section {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        margin-top: 20px;
+    }
+
+    .total-amount {
+        display: flex;
+        justify-content: space-between;
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #2c3e50;
+    }
+
+    .payment-options {
+        margin-top: 30px;
+    }
+
+    .payment-options h2 {
+        color: #2c3e50;
+        margin-bottom: 20px;
+        font-size: 1.3rem;
+        text-align: center;
+    }
+
+    .payment-buttons {
+        display: flex;
+        gap: 15px;
+        flex-direction: column;
+    }
+
+    .btn {
+        padding: 15px 30px;
+        border: none;
+        border-radius: 10px;
+        font-size: 1.1rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+        background: #95a5a6;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #7f8c8d;
+    }
+
+    .no-orders {
+        text-align: center;
+        padding: 40px;
+    }
+
+    .no-orders p {
+        font-size: 1.2rem;
+        color: #e74c3c;
+        margin-bottom: 20px;
+    }
+
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    }
+
+    .modal.hidden {
+        display: none;
+    }
+
+    .modal-content {
+        background: white;
+        padding: 40px;
+        border-radius: 15px;
+        text-align: center;
+        max-width: 400px;
+        width: 90%;
+    }
+
+    .modal-content h2 {
+        color: #27ae60;
+        margin-bottom: 15px;
+    }
+
+    .modal-actions {
+        margin-top: 20px;
+    }
+
+    @media (max-width: 768px) {
+        .payment-card {
+            padding: 20px;
+        }
+
+        .payment-header h1 {
+            font-size: 1.5rem;
+        }
+    }
+</style>
+
+<script>
+    import { supabase } from '../../lib/supabase.js';
+
+    // Get mesa number from URL
+    const urlPath = window.location.pathname;
+    const mesaNumero = parseInt(urlPath.match(/\/payment\/mesa-(\d+)/)?.[1] || '0');
+    
+    let orders = [];
+    let totalAmount = 0;
+
+    async function loadOrders() {
+        const loadingEl = document.getElementById('loading-orders');
+        const summaryEl = document.getElementById('order-summary');
+        const paymentEl = document.getElementById('payment-options');
+        const noOrdersEl = document.getElementById('no-orders');
+
+        try {
+            const { data, error } = await supabase
+                .from('orders')
+                .select(`
+                    order_id,
+                    table_number,
+                    status,
+                    total_amount,
+                    created_at,
+                    order_items (
+                        quantity,
+                        price,
+                        products (
+                            name,
+                            type
+                        )
+                    )
+                `)
+                .eq('table_number', mesaNumero)
+                .eq('status', 'entregado')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            if (loadingEl) loadingEl.style.display = 'none';
+
+            if (!data || data.length === 0) {
+                if (noOrdersEl) noOrdersEl.style.display = 'block';
+                return;
+            }
+
+            orders = data;
+            totalAmount = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+
+            displayOrders();
+
+            if (summaryEl) summaryEl.style.display = 'block';
+            if (paymentEl) paymentEl.style.display = 'block';
+
+        } catch (error) {
+            console.error('Error loading orders:', error);
+            if (loadingEl) loadingEl.innerHTML = '<p style="color: red;">Error al cargar los pedidos</p>';
+        }
+    }
+
+    function displayOrders() {
+        const summaryEl = document.getElementById('order-summary');
+        if (!summaryEl) return;
+
+        let html = '<h2>Resumen de Pedidos</h2>';
+
+        orders.forEach(order => {
+            const orderDate = new Date(order.created_at).toLocaleTimeString('es-ES', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+
+            html += `
+                <div class="order-group">
+                    <div class="order-group-header">
+                        <span class="order-badge">Pedido #${order.order_id}</span>
+                        <span class="order-time">${orderDate}</span>
+                    </div>
+                    <div class="items-list">
+            `;
+
+            order.order_items?.forEach(item => {
+                const icon = item.products?.type === 'cocina' ? '🍳' : '🍺';
+                html += `
+                    <div class="item">
+                        <span>${icon} ${item.quantity}x ${item.products?.name}</span>
+                        <span>${(item.quantity * item.price).toFixed(2)}€</span>
+                    </div>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+            <div class="total-section">
+                <div class="total-amount">
+                    <span>TOTAL:</span>
+                    <span>${totalAmount.toFixed(2)}€</span>
+                </div>
+            </div>
+        `;
+
+        summaryEl.innerHTML = html;
+    }
+
+    async function processBarPayment() {
+        try {
+            // Update all orders to 'pagado'
+            const orderIds = orders.map(o => o.order_id);
+            
+            const { error } = await supabase
+                .from('orders')
+                .update({ status: 'pagado' })
+                .in('order_id', orderIds);
+
+            if (error) throw error;
+
+            showSuccessModal();
+        } catch (error) {
+            console.error('Error processing payment:', error);
+            alert('Error al procesar el pago. Por favor, intenta de nuevo.');
+        }
+    }
+
+    function showSuccessModal() {
+        const modal = document.getElementById('success-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+    }
+
+    // Event listeners
+    document.addEventListener('DOMContentLoaded', () => {
+        loadOrders();
+
+        const barPaymentBtn = document.getElementById('bar-payment-btn');
+        if (barPaymentBtn) {
+            barPaymentBtn.addEventListener('click', processBarPayment);
+        }
+    });
+</script>
+
+</Layout>
