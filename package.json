@@ -7,18 +7,22 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
+    "test": "node tests/functions/products-simple.test.js && node tests/functions/orders-simple.test.js && node tests/functions/order-items.test.js",
+    "test:products": "node tests/functions/products-simple.test.js",
+    "test:orders": "node tests/functions/orders-simple.test.js",
+    "test:order-items": "node tests/functions/order-items.test.js",
     "test:db": "node src/db/test.js",
     "diagnose": "node -e \"import('./src/db/diagnose.js').then(m => m.fullDiagnosis())\""
   },
   "dependencies": {
     "@astrojs/node": "^9.4.4",
-    "@supabase/supabase-js": "^2.57.4",
     "@stripe/stripe-js": "^4.0.0",
+    "@supabase/supabase-js": "^2.57.4",
     "astro": "^5.13.8",
     "dotenv": "^17.2.3",
     "express": "^4.18.2",
     "jest": "^30.1.3",
-    "stripe": "^16.0.0",
+    "stripe": "^16.12.0",
     "supabase": "^2.45.5"
   }
 }

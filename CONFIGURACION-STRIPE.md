@@ -34,7 +34,7 @@
 
 ### 1. Crea el archivo `.env` (si no existe):
 
-```bash
+```bashpec
 # En la raíz del proyecto
 cp .env.example .env
 ```
