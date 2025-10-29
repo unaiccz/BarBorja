@@ -1,9 +1,13 @@
-// @ts-check
+ // @ts-check
 import { defineConfig } from 'astro/config';
+import node from '@astrojs/node';
 
 // https://astro.build/config
 export default defineConfig({
-  output: 'static', // Sitio estático - solo frontend
+  output: 'server', // Modo servidor - permite páginas dinámicas
+  adapter: node({
+    mode: 'standalone'
+  }),
   vite: {
     define: {
       'import.meta.env.PUBLIC_SUPABASE_URL': JSON.stringify(process.env.PUBLIC_SUPABASE_URL),

@@ -22,6 +22,7 @@ export async function getProductById(id) {
 
     if (error) {
         console.error('Error fetching product by ID:', error);
+        
         return null;
     }
 

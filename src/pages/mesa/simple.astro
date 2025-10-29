@@ -1,0 +1,70 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+// Obtener el token de la URL
+const token = Astro.url.searchParams.get('token');
+
+console.log('🔍 SIMPLE ACCESS:', {
+    token: token,
+    url: Astro.url.href
+});
+
+if (!token) {
+    console.log('❌ Sin token, redirigiendo...');
+    return Astro.redirect('/mesa-info');
+}
+
+// Verificar token básico
+let mesaNumero = 0;
+let tokenValid = false;
+
+try {
+    const { supabase } = await import('../../db/supabase.js');
+    
+    const { data, error } = await supabase
+        .from('mesa_tokens')
+        .select('mesa_numero, activo')
+        .eq('token', token)
+        .eq('activo', true)
+        .single();
+        
+    if (data && !error) {
+        mesaNumero = data.mesa_numero;
+        tokenValid = true;
+        console.log('✅ Token válido para mesa:', mesaNumero);
+    } else {
+        console.log('❌ Token inválido:', error);
+        return Astro.redirect('/mesa-info');
+    }
+} catch (err) {
+    console.error('❌ Error verificando token:', err);
+    return Astro.redirect('/mesa-info');
+}
+---
+
+<Layout title={`Mesa ${mesaNumero} - BarBorja`}>
+    <div style="padding: 40px; text-align: center;">
+        <h1 style="color: #2c3e50; font-size: 3rem;">🍴 Mesa {mesaNumero}</h1>
+        <p style="font-size: 1.5rem; color: #27ae60; margin: 20px 0;">
+            ✅ ¡Acceso autorizado!
+        </p>
+        
+        <div style="background: #e8f5e8; padding: 30px; border-radius: 15px; margin: 30px 0;">
+            <h2 style="color: #2e7d32;">🎉 ¡Sistema funcionando!</h2>
+            <p><strong>Token:</strong> {token}</p>
+            <p><strong>Mesa:</strong> {mesaNumero}</p>
+            <p><strong>Estado:</strong> Token válido y activo</p>
+        </div>
+        
+        <div style="margin: 30px 0;">
+            <a href={`/payment/mesa-access?token=${token}`} 
+               style="background: #27ae60; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none; font-weight: bold; font-size: 1.2rem;">
+                💳 Ir a Pagar
+            </a>
+        </div>
+        
+        <p style="color: #666; margin-top: 40px;">
+            Si ves este mensaje, el sistema de acceso seguro está funcionando correctamente.
+        </p>
+    </div>
+</Layout>

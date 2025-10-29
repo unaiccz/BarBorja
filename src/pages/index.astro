@@ -73,6 +73,12 @@ import Layout from '../layouts/Layout.astro';
                     <h3>A Domicilio</h3>
                     <p>Pedidos para entrega en casa</p>
                 </a>
+
+                <a href="/dev-mesas" class="option-card dev-card">
+                    <div class="option-icon">🔧</div>
+                    <h3>Acceso Desarrollo</h3>
+                    <p>Acceso rápido a mesas con tokens (solo desarrollo)</p>
+                </a>
             </div>
         </div>
     </div>
@@ -304,6 +310,20 @@ import Layout from '../layouts/Layout.astro';
         color: #666;
         margin: 0;
         line-height: 1.5;
+    }
+
+    .dev-card {
+        border-color: #667eea;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+    }
+
+    .dev-card:hover {
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        border-color: #764ba2;
+    }
+
+    .dev-card h3 {
+        color: #667eea;
     }
 
     .toast-container {

@@ -1,0 +1,84 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+// Obtener el token de la URL - MÚLTIPLES MÉTODOS
+const url = new URL(Astro.request.url);
+const astroUrl = Astro.url;
+const token = astroUrl.searchParams.get('token') || url.searchParams.get('token');
+
+console.log('🔍 DEBUG test-token.astro:', {
+    'Astro.request.url': url.href,
+    'Astro.url': astroUrl.href,
+    'url.searchParams': Object.fromEntries(url.searchParams),
+    'astroUrl.searchParams': Object.fromEntries(astroUrl.searchParams),
+    token: token,
+    path: url.pathname
+});
+
+let tokenData = null;
+let error = null;
+
+if (token) {
+    try {
+        const { supabase } = await import('../db/supabase.js');
+        console.log('✅ Supabase importado correctamente');
+        
+        const { data, error: dbError } = await supabase
+            .from('mesa_tokens')
+            .select('mesa_numero, activo')
+            .eq('token', token)
+            .eq('activo', true)
+            .single();
+            
+        if (dbError) {
+            console.error('❌ Error DB:', dbError);
+            error = dbError.message;
+        } else {
+            console.log('✅ Token encontrado:', data);
+            tokenData = data;
+        }
+    } catch (err) {
+        console.error('❌ Error importando supabase:', err);
+        error = err.message;
+    }
+}
+---
+
+<Layout title="Test Token - BarBorja">
+    <div style="padding: 20px;">
+        <h1>🧪 Test de Token</h1>
+        
+        <div style="background: #f0f0f0; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h3>📊 Debug Info:</h3>
+            <p><strong>Astro.request.url:</strong> {url.href}</p>
+            <p><strong>Astro.url:</strong> {astroUrl.href}</p>
+            <p><strong>Token (método 1):</strong> {url.searchParams.get('token') || 'NO ENCONTRADO'}</p>
+            <p><strong>Token (método 2):</strong> {astroUrl.searchParams.get('token') || 'NO ENCONTRADO'}</p>
+            <p><strong>Token final:</strong> {token || 'NO PROPORCIONADO'}</p>
+            <p><strong>Path:</strong> {url.pathname}</p>
+        </div>
+
+        {error && (
+            <div style="background: #ffebee; color: #c62828; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <h3>❌ Error:</h3>
+                <p>{error}</p>
+            </div>
+        )}
+
+        {tokenData && (
+            <div style="background: #e8f5e8; color: #2e7d32; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <h3>✅ Token Válido:</h3>
+                <p><strong>Mesa:</strong> {tokenData.mesa_numero}</p>
+                <p><strong>Activo:</strong> {tokenData.activo ? 'Sí' : 'No'}</p>
+            </div>
+        )}
+
+        {!token && (
+            <div style="background: #fff3e0; color: #ef6c00; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <h3>⚠️ Sin Token:</h3>
+                <p>No se proporcionó token en la URL.</p>
+                <p>Usa: <code>?token=tu_token_aqui</code></p>
+            </div>
+        )}
+    </div>
+</Layout>

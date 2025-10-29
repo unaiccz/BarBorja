@@ -1,0 +1,1194 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { supabase } from '../../db/supabase.js';
+
+// Obtener el token de la URL
+const token = Astro.url.searchParams.get('token');
+
+console.log('🔍 DEBUG payment mesa-access:', {
+    token: token,
+    url: Astro.url.href
+});
+
+if (!token) {
+    console.log('❌ Sin token en pago, redirigiendo...');
+    return Astro.redirect('/');
+}
+
+// Verificar que el token existe y está activo
+const { data: mesaData, error } = await supabase
+    .from('mesa_tokens')
+    .select('mesa_numero, activo')
+    .eq('token', token)
+    .eq('activo', true)
+    .single();
+
+if (error || !mesaData) {
+    console.error('❌ Token inválido o inactivo:', token, error);
+    return Astro.redirect('/');
+}
+
+const mesaNumero = mesaData.mesa_numero;
+console.log('✅ Token válido para mesa:', mesaNumero);
+
+// Actualizar last_accessed
+await supabase
+    .from('mesa_tokens')
+    .update({ last_accessed: new Date().toISOString() })
+    .eq('token', token);
+
+const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
+---
+
+<Layout title={`Pagar Mesa ${mesaNumero} - BarBorja`}>
+<script define:vars={{ mesaNumero, stripePublicKey }}>
+    // Variables del servidor disponibles en el cliente
+    window.MESA_NUMERO = mesaNumero;
+    window.STRIPE_PUBLIC_KEY = stripePublicKey;
+    console.log('🔑 Stripe key disponible:', !!stripePublicKey);
+    console.log('🏓 Mesa número:', mesaNumero);
+</script>
+    <div class="payment-container">
+        <div class="payment-card">
+            <div class="payment-header">
+                <h1>💳 Pagar Cuenta</h1>
+                <p>Mesa {mesaNumero}</p>
+                {token && (
+                    <div class="secure-badge">
+                        🔒 Acceso Seguro
+                    </div>
+                )}
+            </div>
+
+            <div id="loading-orders" class="loading-section">
+                <div class="spinner"></div>
+                <p>Cargando pedidos...</p>
+            </div>
+
+            <div id="orders-content" class="orders-content hidden">
+                <div id="orders-list" class="orders-list"></div>
+                
+                <div class="payment-summary">
+                    <div class="summary-row">
+                        <span>Total a pagar:</span>
+                        <span id="total-amount" class="total-amount">0.00€</span>
+                    </div>
+                </div>
+
+                <div class="payment-methods">
+                    <button class="payment-method-btn" id="cash-payment-btn">
+                        <span class="method-icon">💰</span>
+                        <div class="method-info">
+                            <strong>Efectivo</strong>
+                            <small>Pagar en caja</small>
+                        </div>
+                    </button>
+                    
+                    <button class="payment-method-btn" id="card-payment-btn">
+                        <span class="method-icon">💳</span>
+                        <div class="method-info">
+                            <strong>Tarjeta</strong>
+                            <small>Pago con tarjeta</small>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <div id="no-orders" class="no-orders hidden">
+                <div class="empty-state">
+                    <h3>No hay pedidos pendientes</h3>
+                    <p>Esta mesa no tiene pedidos pendientes de pago.</p>
+                    <a href={`/mesa/access?token=${token}`} class="btn-back">
+                        ← Volver a la Carta
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cash Payment Modal -->
+    <div id="cash-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>💰 Pago en Efectivo</h3>
+                <button class="close-btn" onclick="closeCashModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>El total a pagar es: <strong id="cash-total">0.00€</strong></p>
+                <p class="cash-instructions">
+                    📍 <strong>Instrucciones:</strong><br>
+                    1. Dirígete a la barra para realizar el pago en efectivo<br>
+                    2. Al confirmar, el personal recibirá la notificación<br>
+                    3. Tu pedido quedará pendiente hasta la confirmación del personal
+                </p>
+                <div class="cash-actions">
+                    <button class="btn btn-primary" onclick="confirmCashPayment()">
+                        📤 Solicitar Pago en Barra
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeCashModal()">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stripe Payment Modal -->
+    <div id="stripe-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>💳 Pago con Tarjeta</h3>
+                <button class="close-btn" onclick="closeStripeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Total a pagar: <strong id="stripe-total">0.00€</strong></p>
+                
+                <form id="stripe-form">
+                    <div class="form-group">
+                        <label for="stripe-card-element">Información de la tarjeta:</label>
+                        <div id="stripe-card-element" class="stripe-element">
+                            <!-- Stripe Elements will create form elements here -->
+                        </div>
+                        <div id="stripe-card-errors" role="alert" class="error-message"></div>
+                    </div>
+                    
+                    <div class="stripe-actions">
+                        <button type="submit" id="submit-payment" class="btn btn-primary">
+                            💳 Procesar Pago
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="closeStripeModal()">
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="modal hidden">
+        <div class="modal-content success-content">
+            <div class="modal-header success-header">
+                <h3>✅ ¡Pago Completado!</h3>
+            </div>
+            <div class="modal-body">
+                <div class="success-icon">🎉</div>
+                <p><strong>¡Gracias por tu visita!</strong></p>
+                <p>El pago se ha procesado correctamente.</p>
+                <div class="success-actions">
+                    <button class="btn btn-primary" onclick="printReceipt()">
+                        🖨️ Imprimir Recibo
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.location.reload()">
+                        ✅ Finalizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+    
+    <!-- Stripe.js -->
+    <script src="https://js.stripe.com/v3/"></script>
+</Layout>
+
+<style>
+    .payment-container {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .payment-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        max-width: 600px;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    .payment-header {
+        background: linear-gradient(135deg, #2c3e50, #34495e);
+        color: white;
+        padding: 30px;
+        text-align: center;
+        position: relative;
+    }
+
+    .payment-header h1 {
+        margin: 0 0 10px 0;
+        font-size: 2.2rem;
+        font-family: 'Georgia', serif;
+    }
+
+    .payment-header p {
+        margin: 0;
+        font-size: 1.3rem;
+        opacity: 0.9;
+    }
+
+    .secure-badge {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: rgba(39, 174, 96, 0.9);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 15px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .loading-section {
+        padding: 60px 30px;
+        text-align: center;
+        color: #666;
+    }
+
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px auto;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .orders-content {
+        padding: 30px;
+    }
+
+    .orders-list {
+        margin-bottom: 30px;
+    }
+
+    .order-item {
+        background: #f8f9fa;
+        border: 2px solid #e9ecef;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 15px;
+        transition: all 0.3s ease;
+    }
+
+    .order-item:hover {
+        border-color: #d4af37;
+        box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
+    }
+
+    .order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .order-id {
+        font-weight: bold;
+        color: #2c3e50;
+        font-size: 1.1rem;
+    }
+
+    .order-status {
+        padding: 6px 12px;
+        border-radius: 15px;
+        font-size: 12px;
+        font-weight: bold;
+        color: white;
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+    }
+
+    .order-time {
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 10px;
+    }
+
+    .order-items {
+        margin-bottom: 15px;
+    }
+
+    .order-items h4 {
+        margin: 0 0 10px 0;
+        color: #2c3e50;
+        font-size: 16px;
+    }
+
+    .item-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .item-list li {
+        padding: 5px 0;
+        color: #555;
+        border-bottom: 1px dotted #ddd;
+    }
+
+    .item-list li:last-child {
+        border-bottom: none;
+    }
+
+    .order-total {
+        text-align: right;
+        font-weight: bold;
+        color: #d4af37;
+        font-size: 1.2rem;
+    }
+
+    .payment-summary {
+        background: linear-gradient(135deg, #f0fff4, #e8f5e9);
+        border: 3px solid #27ae60;
+        border-radius: 15px;
+        padding: 25px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #2c3e50;
+    }
+
+    .total-amount {
+        color: #27ae60;
+        font-family: 'Georgia', serif;
+        font-size: 1.8rem;
+    }
+
+    .payment-methods {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+
+    .payment-method-btn {
+        background: white;
+        border: 3px solid #d4af37;
+        border-radius: 15px;
+        padding: 25px 20px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        text-align: left;
+    }
+
+    .payment-method-btn:hover {
+        background: #d4af37;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(212, 175, 55, 0.3);
+    }
+
+    .method-icon {
+        font-size: 2.5rem;
+        flex-shrink: 0;
+    }
+
+    .method-info strong {
+        display: block;
+        font-size: 1.2rem;
+        margin-bottom: 5px;
+    }
+
+    .method-info small {
+        color: #666;
+        font-size: 14px;
+    }
+
+    .payment-method-btn:hover .method-info small {
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .no-orders {
+        padding: 60px 30px;
+        text-align: center;
+    }
+
+    .empty-state h3 {
+        color: #2c3e50;
+        margin: 0 0 15px 0;
+        font-size: 1.5rem;
+    }
+
+    .empty-state p {
+        color: #666;
+        margin: 0 0 25px 0;
+        line-height: 1.5;
+    }
+
+    .btn-back {
+        display: inline-block;
+        background: linear-gradient(135deg, #3498db, #2980b9);
+        color: white;
+        padding: 15px 30px;
+        border-radius: 25px;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+    }
+
+    .btn-back:hover {
+        background: linear-gradient(135deg, #2980b9, #21618c);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(52, 152, 219, 0.3);
+    }
+
+    /* Modal Styles */
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .modal.hidden {
+        display: none;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        background: linear-gradient(135deg, #2c3e50, #34495e);
+        color: white;
+        padding: 20px 25px;
+        border-radius: 15px 15px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        font-size: 1.4rem;
+    }
+
+    .close-btn {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: background 0.2s ease;
+    }
+
+    .close-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+    .modal-body {
+        padding: 25px;
+    }
+
+    .cash-instructions {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 20px 0;
+        color: #856404;
+    }
+
+    .cash-actions, .stripe-actions, .success-actions {
+        display: flex;
+        gap: 15px;
+        margin-top: 25px;
+    }
+
+    .btn {
+        flex: 1;
+        padding: 15px;
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #229954, #27ae60);
+        transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+        background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: linear-gradient(135deg, #7f8c8d, #6c7b7d);
+        transform: translateY(-2px);
+    }
+
+    /* Stripe Form Styles */
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #2c3e50;
+    }
+
+    .stripe-element {
+        background: white;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        transition: border-color 0.3s ease;
+    }
+
+    .stripe-element:focus-within {
+        border-color: #3498db;
+        box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    }
+
+    .error-message {
+        color: #e74c3c;
+        font-size: 14px;
+        margin-top: 8px;
+        min-height: 20px;
+    }
+
+    /* Success Modal Styles */
+    .success-content .modal-header {
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+    }
+
+    .success-icon {
+        font-size: 4rem;
+        text-align: center;
+        margin: 20px 0;
+    }
+
+    .success-content p {
+        text-align: center;
+        margin: 15px 0;
+        font-size: 1.1rem;
+    }
+
+    .success-content p:first-of-type {
+        font-size: 1.3rem;
+        color: #27ae60;
+    }
+
+    /* Toast Styles */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+    }
+
+    .toast {
+        background: white;
+        border-left: 4px solid #27ae60;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        animation: slideIn 0.3s ease;
+        min-width: 300px;
+    }
+
+    .toast.error {
+        border-left-color: #e74c3c;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .payment-methods {
+            grid-template-columns: 1fr;
+        }
+
+        .payment-method-btn {
+            padding: 20px 15px;
+        }
+
+        .method-icon {
+            font-size: 2rem;
+        }
+
+        .cash-actions, .stripe-actions, .success-actions {
+            flex-direction: column;
+        }
+
+        .modal-content {
+            width: 95%;
+            margin: 20px;
+        }
+
+        .summary-row {
+            font-size: 1.3rem;
+        }
+
+        .total-amount {
+            font-size: 1.5rem;
+        }
+    }
+
+    .hidden {
+        display: none !important;
+    }
+</style>
+
+<script>
+    import { supabase } from '../../lib/supabase.js';
+
+    // Variables globales
+    let stripe;
+    let elements;
+    let cardElement;
+    let orders = [];
+    let totalAmount = 0;
+    
+    // Obtener número de mesa y token desde la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const accessToken = urlParams.get('token');
+    
+    // Obtener número de mesa del servidor
+    const mesaNumeroClient = window.MESA_NUMERO;
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        console.log(`🏦 Iniciando sistema de pago para Mesa ${mesaNumeroClient}`);
+        
+        await loadOrders();
+        
+        // Event listeners para métodos de pago
+        document.getElementById('cash-payment-btn').addEventListener('click', showCashModal);
+        document.getElementById('card-payment-btn').addEventListener('click', initializeStripe);
+    });
+
+    async function loadOrders() {
+        try {
+            console.log(`📋 Cargando pedidos para Mesa ${mesaNumeroClient}...`);
+            console.log(`🔗 Token usado: ${accessToken}`);
+            
+            const { data: fetchedOrders, error } = await supabase
+                .from('orders')
+                .select(`
+                    order_id,
+                    table_number,
+                    status,
+                    total_amount,
+                    created_at,
+                    order_items (
+                        order_item_id,
+                        quantity,
+                        price,
+                        products (
+                            name,
+                            type
+                        )
+                    )
+                `)
+                .eq('table_number', mesaNumeroClient)
+                .eq('is_paid', false)
+                .not('status', 'in', '(cancelado)')
+                .order('created_at', { ascending: false });
+            
+            console.log('📊 Consulta enviada:', {
+                tabla: 'orders',
+                filtro: `table_number = ${mesaNumeroClient} AND is_paid = false AND status != 'cancelado'`,
+                resultados: fetchedOrders?.length || 0,
+                datos: fetchedOrders
+            });
+
+            if (error) {
+                console.error('❌ Error loading orders:', error);
+                showNoOrders();
+                return;
+            }
+
+            orders = fetchedOrders || [];
+            console.log(`✅ ${orders.length} pedidos cargados`);
+
+            if (orders.length === 0) {
+                showNoOrders();
+                return;
+            }
+
+            displayOrders();
+            
+        } catch (error) {
+            console.error('💥 Error en loadOrders:', error);
+            showNoOrders();
+        }
+    }
+
+    function displayOrders() {
+        const loadingSection = document.getElementById('loading-orders');
+        const ordersContent = document.getElementById('orders-content');
+        const ordersList = document.getElementById('orders-list');
+        const totalAmountElement = document.getElementById('total-amount');
+
+        // Ocultar loading y mostrar contenido
+        loadingSection.classList.add('hidden');
+        ordersContent.classList.remove('hidden');
+
+        // Calcular total
+        totalAmount = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+
+        // Generar HTML de pedidos
+        let ordersHTML = '';
+        orders.forEach(order => {
+            const date = new Date(order.created_at);
+            const formattedDate = date.toLocaleDateString('es-ES', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
+            });
+            const formattedTime = date.toLocaleTimeString('es-ES', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+
+            ordersHTML += `
+                <div class="order-item">
+                    <div class="order-header">
+                        <span class="order-id">Pedido #${order.order_id}</span>
+                        <span class="order-status">Entregado</span>
+                    </div>
+                    <div class="order-time">📅 ${formattedDate} - 🕐 ${formattedTime}</div>
+                    <div class="order-items">
+                        <h4>Productos:</h4>
+                        <ul class="item-list">
+            `;
+
+            // Listar items del pedido
+            if (order.order_items && order.order_items.length > 0) {
+                order.order_items.forEach(item => {
+                    const productName = item.products?.name || 'Producto';
+                    const emoji = item.products?.type === 'cocina' ? '🍳' : '🍺';
+                    ordersHTML += `<li>${emoji} ${item.quantity}x ${productName} - ${item.price}€</li>`;
+                });
+            }
+
+            ordersHTML += `
+                        </ul>
+                    </div>
+                    <div class="order-total">Total: ${order.total_amount.toFixed(2)}€</div>
+                </div>
+            `;
+        });
+
+        ordersList.innerHTML = ordersHTML;
+        totalAmountElement.textContent = totalAmount.toFixed(2) + '€';
+    }
+
+    function showNoOrders() {
+        const loadingSection = document.getElementById('loading-orders');
+        const noOrdersSection = document.getElementById('no-orders');
+        
+        loadingSection.classList.add('hidden');
+        noOrdersSection.classList.remove('hidden');
+    }
+
+    function showCashModal() {
+        const modal = document.getElementById('cash-modal');
+        const cashTotalElement = document.getElementById('cash-total');
+        
+        cashTotalElement.textContent = totalAmount.toFixed(2) + '€';
+        modal.classList.remove('hidden');
+    }
+
+    function closeCashModal() {
+        const modal = document.getElementById('cash-modal');
+        modal.classList.add('hidden');
+    }
+
+    async function confirmCashPayment() {
+        try {
+            console.log('💰 Procesando pago en efectivo...');
+            
+            // Actualizar todos los pedidos a pendiente de confirmación
+            const orderIds = orders.map(o => o.order_id);
+            
+            const { error: updateError } = await supabase
+                .from('orders')
+                .update({ 
+                    payment_method: 'efectivo',
+                    is_paid: false
+                })
+                .in('order_id', orderIds);
+
+            if (updateError) throw updateError;
+
+            console.log('✅ Pago en efectivo enviado a confirmación');
+            closeCashModal();
+            
+            // Mostrar el ticket inmediatamente para que el cliente lo tenga
+            showTicketModal();
+            
+            // Después de 3 segundos, mostrar el mensaje de confirmación
+            setTimeout(() => {
+                showPendingPaymentModal();
+            }, 3000);
+            
+        } catch (error) {
+            console.error('❌ Error procesando pago en efectivo:', error);
+            showToast('Error al procesar el pago', 'error');
+        }
+    }
+
+    async function initializeStripe() {
+        try {
+            // Initialize Stripe
+            const stripeKey = window.STRIPE_PUBLIC_KEY;
+            console.log('🔑 Inicializando Stripe con key:', stripeKey ? 'Disponible' : 'No disponible');
+            
+            if (!stripeKey) {
+                throw new Error('Clave de Stripe no configurada');
+            }
+
+            if (!window.Stripe) {
+                throw new Error('Stripe.js no está cargado');
+            }
+
+            stripe = window.Stripe(stripeKey);
+            console.log('✅ Stripe inicializado correctamente');
+
+            // Create card element
+            elements = stripe.elements();
+            cardElement = elements.create('card', {
+                style: {
+                    base: {
+                        fontSize: '16px',
+                        color: '#32325d',
+                        '::placeholder': {
+                            color: '#aab7c4'
+                        }
+                    },
+                    invalid: {
+                        color: '#fa755a'
+                    }
+                }
+            });
+
+            // Mount the card element
+            cardElement.mount('#stripe-card-element');
+
+            // Update total in modal
+            const stripeTotalEl = document.getElementById('stripe-total');
+            if (stripeTotalEl) {
+                stripeTotalEl.textContent = totalAmount.toFixed(2) + '€';
+            }
+
+            // Show the modal
+            const modal = document.getElementById('stripe-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+
+            // Handle form submission
+            const form = document.getElementById('stripe-form');
+            if (form) {
+                form.addEventListener('submit', processCardPayment);
+            }
+
+        } catch (error) {
+            console.error('Error initializing Stripe:', error);
+            alert('Error al inicializar el pago con tarjeta. Por favor, intenta de nuevo.');
+        }
+    }
+
+    async function processCardPayment(event) {
+        event.preventDefault();
+        
+        if (!stripe || !cardElement) {
+            alert('Stripe no está inicializado correctamente');
+            return;
+        }
+
+        const submitBtn = document.getElementById('submit-payment');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Procesando...';
+        }
+
+        try {
+            // Create payment method
+            const { error, paymentMethod } = await stripe.createPaymentMethod({
+                type: 'card',
+                card: cardElement,
+            });
+
+            if (error) {
+                throw new Error(error.message);
+            }
+
+            // Payment method created successfully
+            // Update orders to 'pagado' status with is_paid flag
+            const orderIds = orders.map(o => o.order_id);
+            
+            const { error: updateError } = await supabase
+                .from('orders')
+                .update({ 
+                    status: 'pagado',
+                    payment_method: 'tarjeta',
+                    is_paid: true
+                })
+                .in('order_id', orderIds);
+
+            if (updateError) throw updateError;
+
+            console.log('✅ Pago con tarjeta procesado exitosamente');
+            closeStripeModal();
+            showSuccessModal();
+
+        } catch (error) {
+            console.error('❌ Error procesando pago:', error);
+            showToast(`Error en el pago: ${error.message}`, 'error');
+            
+            // Display error in form
+            const errorElement = document.getElementById('stripe-card-errors');
+            if (errorElement) {
+                errorElement.textContent = error.message;
+            }
+        } finally {
+            // Re-enable submit button
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '💳 Procesar Pago';
+            }
+        }
+    }
+
+    function closeStripeModal() {
+        const modal = document.getElementById('stripe-modal');
+        modal.classList.add('hidden');
+        
+        // Clear any error messages
+        const errorElement = document.getElementById('stripe-card-errors');
+        if (errorElement) {
+            errorElement.textContent = '';
+        }
+    }
+
+    function printReceipt() {
+        const receiptContent = generateReceiptHTML();
+        const originalContents = document.body.innerHTML;
+        
+        document.body.innerHTML = receiptContent;
+        window.print();
+        document.body.innerHTML = originalContents;
+        
+        // Reload to restore functionality
+        window.location.reload();
+    }
+
+    function generateReceiptHTML() {
+        const now = new Date();
+        const formattedDate = now.toLocaleDateString('es-ES', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            year: 'numeric' 
+        });
+        const formattedTime = now.toLocaleTimeString('es-ES', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+
+        let itemsHTML = '';
+        orders.forEach(order => {
+            if (order.order_items && order.order_items.length > 0) {
+                order.order_items.forEach(item => {
+                    const productName = item.products?.name || 'Producto';
+                    itemsHTML += `
+                        <tr>
+                            <td>${item.quantity}x</td>
+                            <td>${productName}</td>
+                            <td style="text-align: right;">${(item.price * item.quantity).toFixed(2)}€</td>
+                        </tr>
+                    `;
+                });
+            }
+        });
+
+        return `
+            <html>
+                <head>
+                    <title>Recibo - Mesa ${mesaNumeroClient}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; padding: 20px; }
+                        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 15px; }
+                        .header h1 { margin: 0; font-size: 24px; }
+                        .header p { margin: 5px 0; }
+                        .details { margin: 20px 0; }
+                        .details p { margin: 5px 0; }
+                        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                        th, td { padding: 8px 4px; text-align: left; }
+                        .total-row { border-top: 2px solid #000; font-weight: bold; font-size: 18px; }
+                        .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #ccc; }
+                        .footer p { margin: 5px 0; font-size: 14px; color: #666; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>BarBorja</h1>
+                        <p>Recibo de Pago</p>
+                    </div>
+                    
+                    <div class="details">
+                        <p><strong>Mesa:</strong> ${mesaNumeroClient}</p>
+                        <p><strong>Fecha:</strong> ${formattedDate}</p>
+                        <p><strong>Hora:</strong> ${formattedTime}</p>
+                        <p><strong>Pedidos:</strong> ${orders.length}</p>
+                        ${orders.some(o => o.payment_method === 'efectivo' && !o.is_paid) ? 
+                            '<p style="color: orange;"><strong>⏳ PAGO PENDIENTE EN BARRA</strong></p>' : 
+                            '<p style="color: green;"><strong>✅ PAGO CONFIRMADO</strong></p>'
+                        }
+                    </div>
+                    
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Cant.</th>
+                                <th>Producto</th>
+                                <th style="text-align: right;">Importe</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemsHTML}
+                        </tbody>
+                        <tfoot>
+                            <tr class="total-row">
+                                <td colspan="2">TOTAL</td>
+                                <td style="text-align: right;">${totalAmount.toFixed(2)}€</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    
+                    <div class="footer">
+                        <p>¡Gracias por su visita!</p>
+                        ${orders.some(o => o.payment_method === 'efectivo' && !o.is_paid) ? 
+                            '<p style="color: orange; font-weight: bold;">📍 Presente este ticket en barra para completar el pago</p>' : 
+                            '<p>¡Esperamos verle pronto!</p>'
+                        }
+                        <p style="font-size: 12px;">Recibo generado el ${formattedDate} a las ${formattedTime}</p>
+                    </div>
+                </body>
+            </html>
+        `;
+    }
+
+    function showSuccessModal() {
+        const modal = document.getElementById('success-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+    }
+
+    function showTicketModal() {
+        // Usar el mismo modal de éxito pero cambiar el contenido temporalmente
+        const modal = document.getElementById('success-modal');
+        if (!modal) return;
+        
+        const title = modal.querySelector('h3');
+        const message = modal.querySelector('.modal-body p:last-of-type');
+        
+        if (title) {
+            const originalTitle = title.textContent;
+            title.textContent = '🧾 Ticket Disponible';
+            
+            // Restaurar título original después de cerrar
+            setTimeout(() => {
+                if (title) title.textContent = originalTitle;
+            }, 10000);
+        }
+        
+        if (message) {
+            const originalMessage = message.textContent;
+            message.textContent = 'Puedes imprimir tu ticket ahora. El pago quedará pendiente de confirmación en barra.';
+            
+            // Restaurar mensaje original después de cerrar
+            setTimeout(() => {
+                if (message) message.textContent = originalMessage;
+            }, 10000);
+        }
+        
+        modal.classList.remove('hidden');
+    }
+
+    function showPendingPaymentModal() {
+        showToast('🏪 Solicitud de pago en efectivo enviada. Dirígete a la barra para pagar. El personal confirmará tu pago.', 'info');
+        // Recargar pedidos para mostrar el nuevo estado
+        setTimeout(() => {
+            window.location.reload();
+        }, 3000);
+    }
+
+    function showToast(message, type = 'success') {
+        const toastContainer = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        
+        toastContainer.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.remove();
+        }, 4000);
+    }
+
+    // Global functions for modal controls
+    window.closeCashModal = closeCashModal;
+    window.confirmCashPayment = confirmCashPayment;
+    window.closeStripeModal = closeStripeModal;
+    window.printReceipt = printReceipt;
+</script>

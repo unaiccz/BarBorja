@@ -1,31 +1,54 @@
 ---
+export const prerender = false; // Esta página debe ser del lado del servidor
+
 import Layout from '../../layouts/Layout.astro';
+import { getProducts } from '../../functions/products.js';
+import { supabase } from '../../db/supabase.js';
 
-export async function getStaticPaths() {
-    const paths = [];
-    for (let i = 1; i <= 50; i++) {
-        paths.push({ params: { numero: i.toString() } });
-    }
-    return paths;
-}
+// Obtener el token de la URL - CORREGIDO
+const token = Astro.url.searchParams.get('token');
 
-const { numero } = Astro.params;
-const mesaNumero = parseInt(numero || '0');
+console.log('🔍 DEBUG access.astro:', {
+    url: Astro.url.href,
+    token: token,
+    path: Astro.url.pathname
+});
 
-if (isNaN(mesaNumero) || mesaNumero <= 0) {
+if (!token) {
+    console.log('❌ Sin token, redirigiendo...');
     return Astro.redirect('/');
 }
 
-// SEGURIDAD: Redireccionar a página de acceso restringido
-// Las mesas ahora requieren token de acceso via QR
-return Astro.redirect('/mesa-info');
+// Verificar que el token existe y está activo
+const { data: mesaData, error } = await supabase
+    .from('mesa_tokens')
+    .select('mesa_numero, activo')
+    .eq('token', token)
+    .eq('activo', true)
+    .single();
+
+if (error || !mesaData) {
+    console.error('❌ Token inválido o inactivo:', token);
+    return Astro.redirect('/');
+}
+
+const mesaNumero = mesaData.mesa_numero;
+
+// Actualizar last_accessed
+await supabase
+    .from('mesa_tokens')
+    .update({ last_accessed: new Date().toISOString() })
+    .eq('token', token);
+
+// Obtener productos
+const products = await getProducts();
 ---
 
-<Layout title={`Mesa ${numero} - BarBorja`}>
+<Layout title={`Mesa ${mesaNumero} - BarBorja`}>
     <div class="mesa-header">
-        <h1>Mesa {numero}</h1>
+        <h1>Mesa {mesaNumero}</h1>
         <p class="mesa-subtitle">Bienvenidos a BarBorja</p>
-        <a href={`/payment/mesa-${numero}`} class="btn-payment">
+        <a href={`/payment/mesa-access?token=${token}`} class="btn-payment">
             💳 Ir a Pagar
         </a>
     </div>
@@ -34,7 +57,7 @@ return Astro.redirect('/mesa-info');
         <div class="section-header">
             <h2>Nuestra Carta</h2>
             <div class="mesa-info">
-                <span class="mesa-badge">Mesa {numero}</span>
+                <span class="mesa-badge">Mesa {mesaNumero}</span>
             </div>
         </div>
 
@@ -90,7 +113,7 @@ return Astro.redirect('/mesa-info');
     <!-- Historial de Pedidos -->
     <div class="order-history-container" id="order-history">
         <div class="order-history-header">
-            <h3>📋 Historial de Pedidos - Mesa {numero}</h3>
+            <h3>📋 Historial de Pedidos - Mesa {mesaNumero}</h3>
             <button class="history-toggle" id="history-toggle">▼</button>
         </div>
         <div class="order-history-content" id="order-history-content">
@@ -102,7 +125,7 @@ return Astro.redirect('/mesa-info');
 
     <div class="cart-container" id="cart">
         <div class="cart-header">
-            <h3>Tu Pedido - Mesa {numero}</h3>
+            <h3>Tu Pedido - Mesa {mesaNumero}</h3>
             <button class="cart-toggle" id="cart-toggle">🛒</button>
         </div>
         <div class="cart-content" id="cart-content">
@@ -808,25 +831,73 @@ return Astro.redirect('/mesa-info');
 </style>
 
 <script>
-    import { supabase } from '../../lib/supabase.js';
-    
-    // Get mesa number from current page
-    const urlPath = window.location.pathname;
-    const mesaNumero = parseInt(urlPath.match(/\/mesa\/(\d+)/)?.[1] || '0');
-    
+    import { supabase } from '../../db/supabase.js';
+
+    // Get mesa number and token from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    // Extract mesa number from token (format: mesa_X_...)
+    const mesaNumero = token ? parseInt(token.split('_')[1]) || 0 : 0;
+
     let cart = [];
     let cartVisible = true;
+
+    // Make functions globally available so they can be called from onclick attributes
+    window.increaseQuantity = function(productId, maxStock = Infinity) {
+        const qtyElement = document.getElementById(`qty-${productId}`);
+        let currentQty = parseInt(qtyElement?.textContent) || 0;
+
+        if (currentQty < maxStock) {
+            qtyElement.textContent = currentQty + 1;
+        } else {
+            if (typeof showToast === 'function') {
+                showToast(`Stock máximo disponible: ${maxStock}`, 'error');
+            } else {
+                alert(`Stock máximo disponible: ${maxStock}`);
+            }
+        }
+    }
+
+    window.decreaseQuantity = function(productId) {
+        const qtyElement = document.getElementById(`qty-${productId}`);
+        let currentQty = parseInt(qtyElement?.textContent) || 0;
+        if (currentQty > 0) {
+            qtyElement.textContent = currentQty - 1;
+        }
+    }
+
+    // Expose supabase and other helpers globally if needed
+    window.supabase = supabase;
+    window.getToken = () => token;
+    window.getMesaNumero = () => mesaNumero;
 
     function increaseQuantity(productId, maxStock = Infinity) {
         const qtyElement = document.getElementById(`qty-${productId}`);
         let currentQty = parseInt(qtyElement.textContent);
-        
+
         if (currentQty < maxStock) {
             qtyElement.textContent = currentQty + 1;
         } else {
             showToast(`Stock máximo disponible: ${maxStock}`, 'error');
         }
     }
+
+    // Expose decreaseQuantity and addToOrder as globals on window so they can be called from inline handlers or other scripts.
+    // These refer to the local functions (if declared later) or to any existing implementations named decreaseQuantity/addToOrder.
+    // If those functions are not declared, you can replace these assignments with full function implementations.
+    window.decreaseQuantity = typeof decreaseQuantity !== 'undefined' ? decreaseQuantity : function(productId) {
+        const qtyElement = document.getElementById(`qty-${productId}`);
+        let currentQty = parseInt(qtyElement.textContent);
+        if (currentQty > 0) {
+            qtyElement.textContent = currentQty - 1;
+        }
+    };
+
+    window.addToOrder = typeof addToOrder !== 'undefined' ? addToOrder : function(productId, productName, price, productType, stock = 0) {
+        // Placeholder global wrapper. If a local addToOrder function exists later in the file,
+        // the above assignment will expose it on window. Otherwise, implement the logic here.
+        console.warn('addToOrder function not yet implemented. Call ignored for productId:', productId);
+    };
 
     function decreaseQuantity(productId) {
         const qtyElement = document.getElementById(`qty-${productId}`);
@@ -942,15 +1013,15 @@ return Astro.redirect('/mesa-info');
         cart.forEach((item, index) => {
             const subtotal = item.price * item.quantity;
             total += subtotal;
-            
+
             html += `
-                <div class="cart-item">
+                <div class="cart-item" data-product-id="${item.id ?? ''}" data-unit-price="${item.price}">
                     <div class="item-info">
                         <div class="item-name">${item.name}</div>
-                        <div class="item-details">${item.quantity} x ${item.price}€ = ${subtotal.toFixed(2)}€</div>
+                        <div class="item-details">${item.quantity} x ${item.price.toFixed(2)}€ = ${subtotal.toFixed(2)}€</div>
                     </div>
                     <div class="item-actions">
-                        <button class="qty-btn" onclick="removeFromCart(${index})">×</button>
+                        <button class="qty-btn" onclick="removeFromCart(${index})" aria-label="Eliminar ${item.name}">×</button>
                     </div>
                 </div>
             `;
@@ -960,16 +1031,23 @@ return Astro.redirect('/mesa-info');
         totalAmountElement.textContent = total.toFixed(2) + '€';
     }
 
-    function removeFromCart(index) {
+    window.removeFromCart = function(index) {
         cart.splice(index, 1);
         updateCartDisplay();
         showToast('Producto eliminado del carrito', 'success');
     }
 
-    function limpiarCarrito() {
+    window.limpiarCarrito = function() {
         cart = [];
         updateCartDisplay();
         showToast('Carrito limpiado', 'success');
+    }
+
+    window.realizarPedido = async function() {
+        if (typeof realizarPedido === 'function') {
+            return await realizarPedido.apply(this, arguments);
+        }
+        return Promise.reject(new Error('realizarPedido no está definido'));
     }
 
     async function realizarPedido() {
@@ -982,38 +1060,38 @@ return Astro.redirect('/mesa-info');
             const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
             console.log('🛒 Creando pedido...', { totalAmount, mesa: mesaNumero });
 
-            // Use Supabase directly from client
-            const { supabase } = await import('/src/db/supabase.js');
-
+            // Use the imported Supabase client directly (supabase should be available in this module)
             // Create the order
-            const { data: order, error: orderError } = await supabase
-                .from('orders')
-                .insert({
-                    table_number: mesaNumero,
-                    total_amount: totalAmount,
-                    status: 'pendiente'
-                })
-                .select()
-                .single();
-          
-            if (orderError) {
-                console.error('❌ Error creating order:', orderError);
-                showToast('Error al crear el pedido', 'error');
-                return;
-            }
 
+const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .insert({
+                table_number: mesaNumero,
+                total_amount: totalAmount,
+                    status: 'pendiente'
+                    })
+                    .select()
+                .single();
+                
+                if (orderError) {
+          
+console.error('❌ Error creating order:', orderError);
+            showToast('Error al crear el pedido', 'error');
+                return;
+                }
+                
             console.log('✅ Pedido creado:', order);
 
             // Insert order items
-            const orderItemsWithOrderId = cart.map(item => ({
+const orderItemsWithOrderId = cart.map(item => ({
                 order_id: order.order_id,
                 product_id: item.productId,
                 quantity: item.quantity,
                 price: item.price,
                 note: null
             }));
-            
-            const { error: itemsError } = await supabase
+
+            const { error: itemsError } = await supabaseClient
                 .from('order_items')
                 .insert(orderItemsWithOrderId);
 
@@ -1026,7 +1104,7 @@ return Astro.redirect('/mesa-info');
             // Update product stock
             for (const item of cart) {
                 console.log(`📦 Actualizando stock del producto ${item.productId}, cantidad: ${item.quantity}`);
-                
+
                 // First get current stock
                 const { data: product, error: getError } = await supabase
                     .from('products')
@@ -1057,7 +1135,7 @@ return Astro.redirect('/mesa-info');
 
             console.log(`✅ Pedido creado con stock actualizado - Mesa ${mesaNumero} - ID: ${order.order_id}`);
             showToast('¡Pedido realizado con éxito!', 'success');
-            limpiarCarrito();
+            window.limpiarCarrito();
             
             // Refresh order history to show the new order
             await loadOrderHistory();
@@ -1092,12 +1170,7 @@ return Astro.redirect('/mesa-info');
         }, 3000);
     }
 
-    window.increaseQuantity = increaseQuantity;
-    window.decreaseQuantity = decreaseQuantity;
-    window.addToOrder = addToOrder;
-    window.removeFromCart = removeFromCart;
-    window.limpiarCarrito = limpiarCarrito;
-    window.realizarPedido = realizarPedido;
+    // Functions are already assigned to window object above
 
     // Load order history
     async function loadOrderHistory() {
@@ -1220,7 +1293,7 @@ return Astro.redirect('/mesa-info');
                             <span class="payment-label">✅ Todos los pedidos entregados</span>
                             <span class="payment-total">Total a pagar: ${totalAmount.toFixed(2)}€</span>
                         </div>
-                        <a href="/payment/mesa-${mesaNumero}" class="pay-btn-main">
+                        <a href="/payment/mesa-access?token=${token}" class="pay-btn-main">
                             💳 Proceder al Pago
                         </a>
                     </div>

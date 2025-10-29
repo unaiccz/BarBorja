@@ -16,7 +16,9 @@ if (isNaN(mesaNumero) || mesaNumero <= 0) {
     return Astro.redirect('/');
 }
 
-const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
+// SEGURIDAD: Redireccionar a página de acceso restringido
+// El pago ahora requiere token de acceso via QR
+return Astro.redirect('/mesa-info');
 ---
 
 <Layout title={`Pagar Mesa ${numero} - BarBorja`}>
