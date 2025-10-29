@@ -622,32 +622,82 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
         color: #27ae60;
     }
 
-    /* Toast Styles */
+    /* Toast Styles - Notificaciones Flotantes Mejoradas */
     .toast-container {
         position: fixed;
         top: 20px;
         right: 20px;
         z-index: 10000;
+        max-width: 400px;
     }
 
     .toast {
         background: white;
-        border-left: 4px solid #27ae60;
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 10px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        animation: slideIn 0.3s ease;
-        min-width: 300px;
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        animation: slideInBounce 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        min-width: 320px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        position: relative;
+        overflow: hidden;
+        backdrop-filter: blur(10px);
     }
 
-    .toast.error {
-        border-left-color: #e74c3c;
+    .toast::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 4px;
+        background: #27ae60;
     }
 
-    @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
+    .toast.error::before {
+        background: #e74c3c;
+    }
+
+    .toast.info::before {
+        background: #3498db;
+    }
+
+    .toast.warning::before {
+        background: #f39c12;
+    }
+
+    .toast {
+        font-size: 14px;
+        line-height: 1.4;
+        color: #2c3e50;
+        font-weight: 500;
+    }
+
+    @keyframes slideInBounce {
+        0% { 
+            transform: translateX(100%) scale(0.8); 
+            opacity: 0; 
+        }
+        60% { 
+            transform: translateX(-10px) scale(1.02); 
+            opacity: 1; 
+        }
+        100% { 
+            transform: translateX(0) scale(1); 
+            opacity: 1; 
+        }
+    }
+
+    @keyframes slideOut {
+        to { 
+            transform: translateX(100%) scale(0.8); 
+            opacity: 0; 
+        }
+    }
+
+    .toast.removing {
+        animation: slideOut 0.3s ease-in forwards;
     }
 
     /* Responsive Design */
@@ -667,6 +717,22 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
         .cash-actions, .stripe-actions, .success-actions {
             flex-direction: column;
         }
+
+        /* Notificaciones responsive */
+        .toast-container {
+            top: 10px;
+            right: 10px;
+            left: 10px;
+            max-width: none;
+        }
+
+        .toast {
+            min-width: unset;
+            width: 100%;
+            font-size: 13px;
+            padding: 14px 16px;
+        }
+    }
 
         .modal-content {
             width: 95%;
@@ -870,6 +936,7 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
             if (updateError) throw updateError;
 
             console.log('✅ Pago en efectivo enviado a confirmación');
+            showToast('¡Solicitud de pago en efectivo enviada exitosamente!', 'success');
             closeCashModal();
             
             // Mostrar el ticket inmediatamente para que el cliente lo tenga
@@ -988,6 +1055,7 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
             if (updateError) throw updateError;
 
             console.log('✅ Pago con tarjeta procesado exitosamente');
+            showToast('¡Pago con tarjeta procesado exitosamente!', 'success');
             closeStripeModal();
             showSuccessModal();
 
@@ -1065,62 +1133,119 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
                 <head>
                     <title>Recibo - Mesa ${mesaNumeroClient}</title>
                     <style>
-                        body { font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; padding: 20px; }
-                        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 15px; }
-                        .header h1 { margin: 0; font-size: 24px; }
-                        .header p { margin: 5px 0; }
-                        .details { margin: 20px 0; }
-                        .details p { margin: 5px 0; }
-                        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-                        th, td { padding: 8px 4px; text-align: left; }
-                        .total-row { border-top: 2px solid #000; font-weight: bold; font-size: 18px; }
-                        .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #ccc; }
-                        .footer p { margin: 5px 0; font-size: 14px; color: #666; }
+                        body { 
+                            font-family: 'Courier New', monospace; 
+                            max-width: 400px; 
+                            margin: 0 auto; 
+                            padding: 20px; 
+                            background: white;
+                        }
+                        .ticket {
+                            background: white;
+                            padding: 20px;
+                            font-family: 'Courier New', monospace;
+                            border: 2px dashed #333;
+                            margin-bottom: 20px;
+                            font-size: 13px;
+                        }
+                        .header { 
+                            text-align: center; 
+                            margin-bottom: 15px; 
+                            border-bottom: 2px solid #333; 
+                            padding-bottom: 10px; 
+                        }
+                        .header h1 { 
+                            margin: 0; 
+                            font-size: 1.5rem; 
+                        }
+                        .header p { 
+                            margin: 5px 0; 
+                        }
+                        .ticket-divider {
+                            text-align: center;
+                            color: #333;
+                            margin: 10px 0;
+                            font-size: 12px;
+                        }
+                        .details { 
+                            margin: 15px 0; 
+                        }
+                        .details p { 
+                            margin: 5px 0; 
+                            font-size: 13px;
+                        }
+                        table { 
+                            width: 100%; 
+                            border-collapse: collapse; 
+                            margin: 15px 0; 
+                        }
+                        th, td { 
+                            padding: 8px 4px; 
+                            text-align: left; 
+                            font-size: 13px;
+                        }
+                        .total-row { 
+                            border-top: 2px solid #333; 
+                            font-weight: bold; 
+                            font-size: 1.2rem; 
+                            padding-top: 10px;
+                        }
+                        .footer { 
+                            text-align: center; 
+                            margin-top: 15px; 
+                            font-size: 11px; 
+                            border-top: 2px solid #333; 
+                            padding-top: 10px; 
+                        }
+                        .footer p { 
+                            margin: 5px 0; 
+                        }
                     </style>
                 </head>
                 <body>
-                    <div class="header">
-                        <h1>BarBorja</h1>
-                        <p>Recibo de Pago</p>
-                    </div>
-                    
-                    <div class="details">
-                        <p><strong>Mesa:</strong> ${mesaNumeroClient}</p>
-                        <p><strong>Fecha:</strong> ${formattedDate}</p>
-                        <p><strong>Hora:</strong> ${formattedTime}</p>
-                        <p><strong>Pedidos:</strong> ${orders.length}</p>
-                        ${orders.some(o => o.payment_method === 'efectivo' && !o.is_paid) ? 
-                            '<p style="color: orange;"><strong>⏳ PAGO PENDIENTE EN BARRA</strong></p>' : 
-                            '<p style="color: green;"><strong>✅ PAGO CONFIRMADO</strong></p>'
-                        }
-                    </div>
-                    
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Cant.</th>
-                                <th>Producto</th>
-                                <th style="text-align: right;">Importe</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${itemsHTML}
-                        </tbody>
-                        <tfoot>
-                            <tr class="total-row">
-                                <td colspan="2">TOTAL</td>
-                                <td style="text-align: right;">${totalAmount.toFixed(2)}€</td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                    
-                    <div class="footer">
-                        <p>¡Gracias por su visita!</p>
-                        ${orders.some(o => o.payment_method === 'efectivo' && !o.is_paid) ? 
-                            '<p style="color: orange; font-weight: bold;">📍 Presente este ticket en barra para completar el pago</p>' : 
-                            '<p>¡Esperamos verle pronto!</p>'
-                        }
-                        <p style="font-size: 12px;">Recibo generado el ${formattedDate} a las ${formattedTime}</p>
+                    <div class="ticket">
+                        <div class="ticket-header">
+                            <h2>BarBorja</h2>
+                            <p>Recibo de Pago</p>
+                        </div>
+                        
+                        <div class="ticket-divider">═══════════════════════════</div>
+                        
+                        <div class="ticket-info">
+                            <p><strong>Mesa:</strong> ${mesaNumeroClient}</p>
+                            <p><strong>Fecha:</strong> ${formattedDate}</p>
+                            <p><strong>Hora:</strong> ${formattedTime}</p>
+                            <p><strong>Pedidos:</strong> ${orders.length}</p>
+                            ${orders.some(o => o.payment_method === 'efectivo' && !o.is_paid) ? 
+                                '<p style="color: orange;"><strong>⏳ PAGO PENDIENTE EN BARRA</strong></p>' : 
+                                '<p style="color: green;"><strong>✅ PAGO CONFIRMADO</strong></p>'
+                            }
+                        </div>
+                        
+                        <div class="ticket-divider">═══════════════════════════</div>
+                        
+                        <div class="ticket-items">
+                            <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 10px;">
+                                <span>Cant.</span>
+                                <span>Producto</span>
+                                <span>Importe</span>
+                            </div>
+                            ${itemsHTML.replace(/<tr><td>/g, '<div class="ticket-item"><span>').replace(/<\/td><td>/g, '</span><span>').replace(/<\/td><td style="text-align: right;">/g, '</span><span>').replace(/<\/td><\/tr>/g, '</span></div>')}
+                        </div>
+                        
+                        <div class="ticket-total">
+                            <span>TOTAL</span>
+                            <span>${totalAmount.toFixed(2)}€</span>
+                        </div>
+                        
+                        <div class="ticket-footer">
+                            <p>¡Gracias por su visita!</p>
+                            ${orders.some(o => o.payment_method === 'efectivo' && !o.is_paid) ? 
+                                '<p style="color: orange; font-weight: bold;">📍 Presente este ticket en barra para completar el pago</p>' : 
+                                '<p>¡Esperamos verle pronto!</p>'
+                            }
+                            <p>Recibo generado el ${formattedDate} a las ${formattedTime}</p>
+                        </div>
                     </div>
                 </body>
             </html>
@@ -1167,23 +1292,44 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
     function showPendingPaymentModal() {
         showToast('🏪 Solicitud de pago en efectivo enviada. Dirígete a la barra para pagar. El personal confirmará tu pago.', 'info');
-        // Recargar pedidos para mostrar el nuevo estado
-        setTimeout(() => {
-            window.location.reload();
-        }, 3000);
+        // No recargar la página - mantener al usuario en la misma vista
     }
 
     function showToast(message, type = 'success') {
         const toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) return;
+        
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
         toast.textContent = message;
         
+        // Agregar icono según el tipo
+        const icon = getToastIcon(type);
+        if (icon) {
+            toast.innerHTML = `<span style="margin-right: 8px;">${icon}</span>${message}`;
+        }
+        
         toastContainer.appendChild(toast);
         
+        // Eliminar con animación después de 5 segundos
         setTimeout(() => {
-            toast.remove();
-        }, 4000);
+            toast.classList.add('removing');
+            setTimeout(() => {
+                if (toast && toast.parentNode) {
+                    toast.remove();
+                }
+            }, 300);
+        }, 5000);
+    }
+
+    function getToastIcon(type) {
+        const icons = {
+            'success': '✅',
+            'error': '❌',
+            'info': 'ℹ️',
+            'warning': '⚠️'
+        };
+        return icons[type] || '✅';
     }
 
     // Global functions for modal controls

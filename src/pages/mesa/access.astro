@@ -1038,9 +1038,26 @@ const products = await getProducts();
     }
 
     window.limpiarCarrito = function() {
-        cart = [];
-        updateCartDisplay();
-        showToast('Carrito limpiado', 'success');
+        try {
+            console.log('🧹 Limpiando carrito...', { itemsAntes: cart.length });
+            cart = [];
+            updateCartDisplay();
+            
+            // Hacer que el carrito parpadee brevemente para indicar que se limpió
+            const cartContainer = document.getElementById('cart');
+            if (cartContainer) {
+                cartContainer.style.opacity = '0.5';
+                setTimeout(() => {
+                    cartContainer.style.opacity = '1';
+                }, 200);
+            }
+            
+            showToast('🛒 Carrito limpiado correctamente', 'success');
+            console.log('✅ Carrito limpiado exitosamente');
+        } catch (error) {
+            console.error('❌ Error al limpiar carrito:', error);
+            showToast('Error al limpiar el carrito', 'error');
+        }
     }
 
     window.realizarPedido = async function() {
@@ -1051,6 +1068,8 @@ const products = await getProducts();
     }
 
     async function realizarPedido() {
+        console.log('🚀 Iniciando realizarPedido...', { cartItems: cart.length });
+        
         if (cart.length === 0) {
             showToast('El carrito está vacío', 'error');
             return;
@@ -1058,7 +1077,7 @@ const products = await getProducts();
 
         try {
             const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            console.log('🛒 Creando pedido...', { totalAmount, mesa: mesaNumero });
+            console.log('🛒 Creando pedido...', { totalAmount, mesa: mesaNumero, cartItems: cart });
 
             // Use the imported Supabase client directly (supabase should be available in this module)
             // Create the order
@@ -1091,7 +1110,7 @@ const orderItemsWithOrderId = cart.map(item => ({
                 note: null
             }));
 
-            const { error: itemsError } = await supabaseClient
+            const { error: itemsError } = await supabase
                 .from('order_items')
                 .insert(orderItemsWithOrderId);
 
@@ -1134,20 +1153,28 @@ const orderItemsWithOrderId = cart.map(item => ({
             }
 
             console.log(`✅ Pedido creado con stock actualizado - Mesa ${mesaNumero} - ID: ${order.order_id}`);
-            showToast('¡Pedido realizado con éxito!', 'success');
+            
+            // Mostrar toast de éxito PRIMERO
+            showToast('¡Pedido realizado con éxito! 🎉', 'success');
+            
+            // Pequeña pausa para que el usuario vea el mensaje
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Limpiar carrito con feedback visual
             window.limpiarCarrito();
             
             // Refresh order history to show the new order
             await loadOrderHistory();
             
             // Reload the page to refresh product stock from database
+            // Dar más tiempo para que el usuario vea el carrito limpio
             setTimeout(() => {
                 location.reload();
-            }, 1500);
+            }, 2500);
 
         } catch (error) {
             console.error('💥 Error al realizar pedido:', error);
-            showToast('Error al realizar el pedido', 'error');
+            showToast(`Error al realizar el pedido: ${error.message || error}`, 'error');
         }
     }
 
