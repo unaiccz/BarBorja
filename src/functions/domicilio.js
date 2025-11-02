@@ -36,6 +36,48 @@ export async function createPedidoDomicilio(pedidoData) {
         }
 
         console.log('✅ Pedido a domicilio creado:', data.id);
+
+        // Update product stock for each item
+        if (pedidoData.productos && pedidoData.productos.length > 0) {
+            console.log('📦 Actualizando stock de productos...');
+            for (const producto of pedidoData.productos) {
+                try {
+                    console.log(`📦 Actualizando stock del producto ${producto.id}, cantidad: ${producto.cantidad}`);
+                    
+                    // First get current stock
+                    const { data: currentProduct, error: getError } = await supabase
+                        .from('products')
+                        .select('stock')
+                        .eq('product_id', producto.id)
+                        .single();
+                    
+                    if (getError) {
+                        console.warn('⚠️ Warning: Could not get current stock for product', producto.id, getError);
+                        continue;
+                    }
+                    
+                    // Calculate new stock (never below 0)
+                    const newStock = Math.max(0, (currentProduct.stock || 0) - producto.cantidad);
+                    
+                    // Update stock
+                    const { error: stockError } = await supabase
+                        .from('products')
+                        .update({ stock: newStock })
+                        .eq('product_id', producto.id);
+                    
+                    if (stockError) {
+                        console.warn('⚠️ Warning: Could not update stock for product', producto.id, stockError);
+                        // Don't fail the order creation if stock update fails
+                    } else {
+                        console.log(`✅ Stock actualizado para producto ${producto.id}: ${currentProduct.stock} → ${newStock}`);
+                    }
+                } catch (stockUpdateError) {
+                    console.warn('⚠️ Warning updating stock:', stockUpdateError);
+                    // Continue with next product
+                }
+            }
+        }
+
         return { success: true, data: data };
     } catch (error) {
         console.error('❌ Error en createPedidoDomicilio:', error);

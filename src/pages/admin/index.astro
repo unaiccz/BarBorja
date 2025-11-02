@@ -18,6 +18,10 @@ import Layout from '../../layouts/Layout.astro';
                 <span class="icon">📦</span>
                 Productos
             </button>
+            <button class="tab-button" data-tab="categorias">
+                <span class="icon">🏷️</span>
+                Categorías
+            </button>
             <button class="tab-button" data-tab="pedidos">
                 <span class="icon">📋</span>
                 Pedidos Mesa
@@ -71,6 +75,13 @@ import Layout from '../../layouts/Layout.astro';
                                 <option value="barra">Barra</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label for="category_id">Categoría:</label>
+                            <select id="category_id" name="category_id">
+                                <option value="">Seleccionar categoría</option>
+                                <!-- Las categorías se cargarán dinámicamente -->
+                            </select>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="description">Descripción:</label>
@@ -85,9 +96,13 @@ import Layout from '../../layouts/Layout.astro';
                         <textarea id="allergens" name="allergens" rows="2" placeholder="Separar con comas"></textarea>
                     </div>
                     <div class="form-group">
-                        <label for="image_url">URL de Imagen:</label>
-                        <input type="url" id="image_url" name="image_url" placeholder="https://ejemplo.com/imagen.jpg">
-                        <small style="color: #666; display: block; margin-top: 5px;">Opcional: URL de la imagen del producto</small>
+                        <label for="image_file">Imagen del Producto:</label>
+                        <input type="file" id="image_file" name="image_file" accept="image/*">
+                        <small style="color: #666; display: block; margin-top: 5px;">Opcional: Selecciona una imagen (JPG, PNG, WebP, etc.)</small>
+                        <div id="image_preview" style="margin-top: 10px; display: none;">
+                            <img id="preview_img" src="" alt="Vista previa" style="max-width: 200px; max-height: 200px; border-radius: 8px; border: 2px solid #e9ecef;">
+                        </div>
+                        <input type="hidden" id="current_image_url" name="current_image_url">
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn btn-success">Guardar</button>
@@ -112,6 +127,51 @@ import Layout from '../../layouts/Layout.astro';
             </div>
         </div>
 
+        <!-- Categories Section -->
+        <div id="categorias" class="tab-content">
+            <div class="section-header">
+                <h2>Gestión de Categorías</h2>
+                <button class="btn btn-primary" id="add-category-btn">
+                    <span class="icon">➕</span>
+                    Nueva Categoría
+                </button>
+            </div>
+
+            <!-- Category Form -->
+            <div id="category-form" class="form-container hidden">
+                <h3 id="category-form-title">Crear Nueva Categoría</h3>
+                <form id="category-form-element">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="cat-name">Nombre:</label>
+                            <input type="text" id="cat-name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cat-icon">Icono/Emoji:</label>
+                            <input type="text" id="cat-icon" name="icon" placeholder="ej: 🍕, 🥗, 🍷" maxlength="2" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cat-order">Orden:</label>
+                            <input type="number" id="cat-order" name="order" min="1" value="1" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="cat-description">Descripción:</label>
+                        <textarea id="cat-description" name="description" rows="2" placeholder="Opcional: Descripción de la categoría"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-success">Guardar</button>
+                        <button type="button" class="btn btn-secondary" id="cancel-category-form">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Categories List -->
+            <div id="categories-list" class="categories-container">
+                <!-- Categories will be loaded here -->
+            </div>
+        </div>
+
         <!-- Kitchen Orders Section -->
         <div id="pedidos" class="tab-content">
             <div class="section-header">
@@ -124,11 +184,11 @@ import Layout from '../../layouts/Layout.astro';
                     <button class="filter-btn" data-status="entregado">Entregados</button>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button class="btn btn-warning" onclick="clearAllOrders()" style="flex: 1;">
-                        🗑️ Vaciar Pedidos
+                    <button class="btn btn-info" onclick="extractAllOrderTickets()" style="flex: 1;">
+                        🎫 Extraer Todos los Tickets
                     </button>
-                    <button class="btn btn-info" onclick="printAllOrders()" style="flex: 1;">
-                        🖨️ Imprimir Todos
+                    <button class="btn btn-warning" onclick="clearAllOrders()" style="flex: 1;">
+                        �️ Archivar Entregados
                     </button>
                 </div>
             </div>
@@ -154,6 +214,14 @@ import Layout from '../../layouts/Layout.astro';
                     <button class="filter-btn" data-payment="pending">🔴 Pendientes de Pago</button>
                     <button class="filter-btn" data-payment="paid">✅ Pagados</button>
                 </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn btn-info" onclick="extractAllDeliveryTickets()" style="flex: 1;">
+                        🎫 Extraer Todos los Tickets
+                    </button>
+                    <button class="btn btn-warning" onclick="clearAllDeliveries()" style="flex: 1;">
+                        🗑️ Archivar Completados
+                    </button>
+                </div>
             </div>
             <div id="domicilio-orders-list" class="domicilio-orders-container">
                 <!-- Delivery orders will be loaded here -->
@@ -166,6 +234,14 @@ import Layout from '../../layouts/Layout.astro';
                 <h2>💰 Confirmación de Pagos en Barra</h2>
                 <div class="pagos-stats" id="pagos-stats">
                     <!-- Stats will be loaded here -->
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn btn-info" onclick="extractAllTickets()" style="flex: 1;">
+                        🎫 Extraer Todos los Tickets
+                    </button>
+                    <button class="btn btn-warning" onclick="clearAllCashPayments()" style="flex: 1;">
+                        🗑️ Vaciar Pagos Confirmados
+                    </button>
                 </div>
             </div>
             <div id="pagos-barra-list" class="pagos-container">
@@ -511,11 +587,11 @@ import Layout from '../../layouts/Layout.astro';
 
     .product-image {
         width: 100%;
-        height: 200px;
+        height: 220px;
         overflow: hidden;
         border-radius: 12px;
         margin-bottom: 20px;
-        background: linear-gradient(135deg, #f5f1e8, #faf7f0);
+        background: #f0f1f3;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -525,288 +601,205 @@ import Layout from '../../layouts/Layout.astro';
         width: 100%;
         height: 100%;
         object-fit: cover;
-        transition: transform 0.3s ease;
+        object-position: center;
+        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     .product-card:hover .product-image img {
-        transform: scale(1.05);
+        transform: scale(1.08);
     }
 
     .product-card {
-        background: linear-gradient(145deg, #ffffff, #fefefe);
-        border: 3px solid #d4af37;
-        border-radius: 20px;
-        padding: 35px;
-        position: relative;
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 
-            0 8px 25px rgba(212, 175, 55, 0.2),
-            0 2px 10px rgba(0, 0, 0, 0.1);
-        font-family: 'Georgia', serif;
-        margin-bottom: 20px;
-        background-image: 
-            radial-gradient(circle at 20% 20%, rgba(212, 175, 55, 0.03) 0%, transparent 50%),
-            radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.03) 0%, transparent 50%);
-    }
-
-    .product-card::before {
-        content: '';
-        position: absolute;
-        top: 12px;
-        left: 12px;
-        right: 12px;
-        bottom: 12px;
-        border: 2px solid #e8d5a3;
-        border-radius: 12px;
-        pointer-events: none;
-        box-shadow: inset 0 0 20px rgba(212, 175, 55, 0.05);
-    }
-
-    .product-card::after {
-        content: '✦';
-        position: absolute;
-        top: -8px;
-        left: 50%;
-        transform: translateX(-50%);
-        color: #d4af37;
-        font-size: 16px;
         background: #ffffff;
-        padding: 0 10px;
-        text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
     }
 
     .product-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(212, 175, 55, 0.25);
-        border-color: #b8941f;
+        transform: translateY(-8px);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+        border-color: rgba(52, 152, 219, 0.3);
+    }
+
+    .product-card::before,
+    .product-card::after {
+        display: none;
     }
 
     .product-card-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 25px;
-        padding-bottom: 20px;
-        border-bottom: 3px double #d4af37;
+        margin-bottom: 0;
+        padding: 0;
+        border-bottom: none;
         position: relative;
     }
 
     .product-card-header::after {
-        content: '◆';
-        position: absolute;
-        bottom: -8px;
-        left: 50%;
-        transform: translateX(-50%);
-        color: #d4af37;
-        font-size: 12px;
-        background: #ffffff;
-        padding: 0 8px;
+        display: none;
     }
 
     .product-card h3 {
         margin: 0;
-        color: #2c1810;
-        font-size: 1.6rem;
+        color: #2c3e50;
+        font-size: 1.4rem;
         font-weight: 700;
         line-height: 1.3;
-        font-family: 'Georgia', serif;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        letter-spacing: -0.5px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        text-shadow: none;
+        letter-spacing: 0;
         position: relative;
     }
 
     .product-card h3::after {
-        content: '';
-        position: absolute;
-        bottom: -5px;
-        left: 0;
-        width: 60%;
-        height: 2px;
-        background: linear-gradient(90deg, #d4af37, transparent);
-        border-radius: 1px;
+        display: none;
     }
 
     .product-card .type-badge {
         display: inline-flex;
         align-items: center;
-        padding: 8px 16px;
-        border-radius: 25px;
+        padding: 6px 12px;
+        border-radius: 8px;
         font-size: 11px;
-        font-weight: 700;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 1.5px;
+        letter-spacing: 0.5px;
         flex-shrink: 0;
-        font-family: sans-serif;
-        border: 2px solid rgba(255,255,255,0.8);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        border: none;
         position: relative;
         overflow: hidden;
     }
 
     .type-badge::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-        transition: left 0.5s ease;
-    }
-
-    .product-card:hover .type-badge::before {
-        left: 100%;
+        display: none;
     }
 
     .type-badge.cocina {
-        background: linear-gradient(135deg, #ff6b35, #ff8a50, #ff6b35);
+        background: linear-gradient(135deg, #ff6b6b 0%, #ff8787 100%);
         color: white;
-        box-shadow: 
-            0 4px 15px rgba(255, 107, 53, 0.4),
-            0 0 20px rgba(255, 107, 53, 0.2);
+        box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
     }
 
     .type-badge.barra {
-        background: linear-gradient(135deg, #4a90e2, #357abd, #4a90e2);
+        background: linear-gradient(135deg, #4c6ef5 0%, #5c7cfa 100%);
         color: white;
-        box-shadow: 
-            0 4px 15px rgba(74, 144, 226, 0.4),
-            0 0 20px rgba(74, 144, 226, 0.2);
+        box-shadow: 0 2px 8px rgba(76, 110, 245, 0.3);
+    }
+
+    .product-card:hover .type-badge::before {
+        display: none;
     }
 
     .product-card .price {
-        font-size: 2.2rem;
+        font-size: 1.8rem;
         font-weight: 700;
-        color: #d4af37;
-        margin: 25px 0;
+        color: #27ae60;
+        margin: 0;
         display: flex;
         align-items: baseline;
-        font-family: 'Georgia', serif;
-        text-shadow: 0 2px 4px rgba(212, 175, 55, 0.3);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        text-shadow: none;
         position: relative;
-        justify-content: center;
-        background: linear-gradient(135deg, 
-            rgba(212, 175, 55, 0.1), 
-            rgba(212, 175, 55, 0.05), 
-            rgba(212, 175, 55, 0.1));
-        padding: 15px 25px;
-        border-radius: 50px;
-        border: 2px solid rgba(212, 175, 55, 0.2);
+        justify-content: flex-start;
+        background: transparent;
+        padding: 0;
+        border-radius: 0;
+        border: none;
     }
 
     .product-card .price::after {
-        content: "€";
-        font-size: 1.4rem;
-        font-weight: 600;
-        color: #b8941f;
-        margin-left: 5px;
+        content: "";
+        display: none;
     }
 
     .product-card .price::before {
         content: '';
-        position: absolute;
-        top: -2px;
-        left: -2px;
-        right: -2px;
-        bottom: -2px;
-        background: linear-gradient(45deg, #d4af37, #e8d5a3, #d4af37);
-        border-radius: 50px;
-        z-index: -1;
-        opacity: 0.3;
+        display: none;
     }
 
     .product-card .stock {
-        color: #8b7355;
-        font-size: 14px;
+        color: #7f8c8d;
+        font-size: 13px;
         font-weight: 600;
-        margin: 20px 0;
+        margin: 0;
         display: flex;
         align-items: center;
-        justify-content: center;
-        gap: 8px;
-        font-style: italic;
-        padding: 12px 20px;
-        background: linear-gradient(135deg, 
-            rgba(212, 175, 55, 0.1), 
-            rgba(212, 175, 55, 0.05));
-        border-radius: 25px;
-        border: 1px solid rgba(212, 175, 55, 0.2);
+        justify-content: flex-start;
+        gap: 6px;
+        font-style: normal;
+        padding: 0;
+        background: transparent;
+        border-radius: 0;
+        border: none;
     }
 
     .product-card .stock::before {
-        content: "📦";
-        font-size: 14px;
-        filter: sepia(1) hue-rotate(25deg) saturate(2);
+        content: "";
+        display: none;
     }
 
     .product-card .description {
-        color: #5d4e37;
-        font-size: 16px;
-        line-height: 1.7;
-        margin: 25px 0;
-        font-style: italic;
-        text-align: center;
-        padding: 20px;
-        background: linear-gradient(135deg, 
-            rgba(250, 248, 240, 0.8), 
-            rgba(248, 244, 230, 0.9), 
-            rgba(250, 248, 240, 0.8));
-        border-radius: 15px;
-        border: 1px solid rgba(212, 175, 55, 0.2);
+        color: #7f8c8d;
+        font-size: 14px;
+        line-height: 1.5;
+        margin: 0;
+        font-style: normal;
+        text-align: left;
+        padding: 0;
+        background: transparent;
+        border-radius: 0;
+        border: none;
         position: relative;
-        box-shadow: inset 0 2px 10px rgba(212, 175, 55, 0.05);
+        box-shadow: none;
     }
 
     .product-card .description::before,
     .product-card .description::after {
-        content: '"';
-        font-size: 2rem;
-        color: #d4af37;
-        font-family: 'Georgia', serif;
-        opacity: 0.6;
-        position: absolute;
-        top: 10px;
-    }
+        content: "";
+        display: none;
 
     .product-card .description::before {
         left: 15px;
     }
 
     .product-card .description::after {
-        right: 15px;
-        transform: scaleX(-1);
+        right: 0;
+        transform: none;
     }
 
     .product-card .meta-info {
-        margin: 30px 0;
-        background: linear-gradient(135deg, #faf8f0, #f8f4e6);
-        padding: 25px;
-        border-radius: 15px;
-        border: 2px solid rgba(212, 175, 55, 0.3);
+        margin: 0;
+        background: transparent;
+        padding: 0;
+        border-radius: 0;
+        border: none;
         position: relative;
-        box-shadow: 0 4px 15px rgba(212, 175, 55, 0.1);
+        box-shadow: none;
     }
 
     .product-card .meta-info::before {
-        content: '※';
-        position: absolute;
-        top: -10px;
-        left: 20px;
-        color: #d4af37;
-        font-size: 18px;
-        background: #ffffff;
-        padding: 0 8px;
+        content: '';
+        display: none;
     }
 
     .product-card .meta-item {
-        font-size: 14px;
-        color: #8b7355;
-        margin-bottom: 12px;
-        display: flex;
+        font-size: 13px;
+        color: #7f8c8d;
+        margin-bottom: 0;
+        display: block;
         align-items: flex-start;
-        gap: 12px;
-        line-height: 1.5;
-        padding: 8px 0;
-        border-bottom: 1px dotted rgba(212, 175, 55, 0.3);
+        gap: 0;
+        line-height: 1.4;
+        padding: 0;
+        border-bottom: none;
     }
 
     .product-card .meta-item:last-child {
@@ -815,40 +808,43 @@ import Layout from '../../layouts/Layout.astro';
     }
 
     .product-card .meta-item strong {
-        color: #5d4e37;
-        font-weight: 700;
-        min-width: 90px;
+        color: #2c3e50;
+        font-weight: 600;
+        min-width: 0;
         font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        font-family: sans-serif;
+        text-transform: none;
+        letter-spacing: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        display: block;
+        margin-bottom: 3px;
     }
 
     .product-card .actions {
         display: flex;
-        gap: 10px;
-        margin-top: 20px;
-        padding-top: 15px;
-        border-top: 1px dotted #d4af37;
+        gap: 8px;
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+        margin-top: auto;
     }
 
     .product-card .btn {
         flex: 1;
-        padding: 12px 16px;
+        padding: 10px 12px;
         font-size: 12px;
         font-weight: 600;
-        border-radius: 25px;
-        border: 2px solid transparent;
+        border-radius: 6px;
+        border: 1px solid transparent;
         cursor: pointer;
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
+        gap: 4px;
         text-decoration: none;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-family: sans-serif;
+        text-transform: none;
+        letter-spacing: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
     .product-card .btn:hover {
@@ -948,6 +944,115 @@ import Layout from '../../layouts/Layout.astro';
         background: #007bff;
         color: white;
         border-color: #007bff;
+    }
+
+    /* Categories Container */
+    .categories-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .category-card {
+        background: #ffffff;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .category-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+        border-color: rgba(52, 152, 219, 0.3);
+    }
+
+    .category-card .card-header {
+        padding: 20px;
+        text-align: center;
+        border-bottom: none;
+    }
+
+    .category-card .card-header > div:first-child {
+        font-size: 48px;
+        line-height: 1;
+        margin-bottom: 12px;
+    }
+
+    .category-card .card-header h3 {
+        margin: 0 0 8px 0;
+        color: #2c3e50;
+        font-size: 18px;
+        font-weight: 700;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .category-card .card-header p {
+        margin: 0;
+        color: #7f8c8d;
+        font-size: 13px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .category-card .card-body {
+        padding: 15px 20px;
+        text-align: center;
+        flex-grow: 1;
+    }
+
+    .category-card .card-body p {
+        margin: 0;
+        color: #7f8c8d;
+        font-size: 13px;
+        line-height: 1.5;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .category-card .card-footer {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        padding: 12px;
+        background: rgba(0, 0, 0, 0.02);
+        border-top: 1px solid rgba(0, 0, 0, 0.04);
+    }
+
+    .category-card .card-footer .btn {
+        padding: 10px 12px;
+        font-size: 12px;
+        border-radius: 6px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        border: none;
+        cursor: pointer;
+    }
+
+    .category-card .card-footer .btn-warning {
+        background: linear-gradient(135deg, #f39c12 0%, #f7b731 100%);
+        color: white;
+        box-shadow: 0 2px 8px rgba(243, 156, 18, 0.3);
+    }
+
+    .category-card .card-footer .btn-warning:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(243, 156, 18, 0.4);
+    }
+
+    .category-card .card-footer .btn-danger {
+        background: linear-gradient(135deg, #e74c3c 0%, #e67e22 100%);
+        color: white;
+        box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+    }
+
+    .category-card .card-footer .btn-danger:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
     }
 
     /* Type Filters */
@@ -1738,7 +1843,281 @@ import Layout from '../../layouts/Layout.astro';
             display: none;
         }
     }
+
+    /* ===== ESTILOS PARA TARJETAS PREMIUM (MEJORADAS) ===== */
+    .premium-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        padding: 0;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .premium-card:hover {
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        transform: translateY(-2px);
+    }
+
+    .premium-card .card-header {
+        padding: 20px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .premium-card .card-body {
+        padding: 20px;
+    }
+
+    .premium-card .card-footer {
+        padding: 15px 20px;
+        background: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+        display: flex;
+        gap: 10px;
+    }
+
+    /* Producto Cards */
+    .product-image-wrapper {
+        width: 100%;
+        height: 220px;
+        background: #f0f1f3;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 15px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .product-image-wrapper.no-image {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #f0f1f3 0%, #e9ecef 100%);
+    }
+
+    .product-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+        display: block;
+        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .product-image-wrapper:hover .product-image {
+        transform: scale(1.08);
+    }
+
+    .stock-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        backdrop-filter: blur(10px);
+        background: rgba(255, 255, 255, 0.95);
+        color: #2c3e50;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    .stock-badge.in-stock {
+        background: rgba(39, 174, 96, 0.95);
+        color: white;
+        border: none;
+    }
+
+    .stock-badge.low-stock {
+        background: rgba(241, 196, 15, 0.95);
+        color: #2c3e50;
+        border: none;
+    }
+
+    .stock-badge.out-of-stock {
+        background: rgba(231, 76, 60, 0.95);
+        color: white;
+        border: none;
+    }
+
+    .product-name {
+        font-size: 18px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin: 0 0 10px 0;
+    }
+
+    .card-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 12px;
+    }
+
+    .price-tag {
+        font-size: 24px;
+        font-weight: bold;
+        color: #27ae60;
+        background: #e8f8f5;
+        padding: 8px 16px;
+        border-radius: 8px;
+        white-space: nowrap;
+    }
+
+    .badges-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: bold;
+        white-space: nowrap;
+    }
+
+    .type-badge {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+
+    .type-badge.cocina {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+    .type-badge.barra {
+        background: #f3e5f5;
+        color: #6a1b9a;
+    }
+
+    .category-badge {
+        background: #e8f5e9;
+        color: #1b5e20;
+    }
+
+    .product-description {
+        color: #7f8c8d;
+        font-size: 14px;
+        margin: 10px 0;
+        font-style: italic;
+    }
+
+    .meta-info {
+        background: #f5f6f7;
+        padding: 12px;
+        border-radius: 6px;
+        margin-top: 12px;
+        font-size: 12px;
+    }
+
+    .meta-item {
+        margin-bottom: 8px;
+        line-height: 1.5;
+    }
+
+    .meta-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .meta-label {
+        display: block;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 3px;
+    }
+
+    .meta-value {
+        display: block;
+        color: #7f8c8d;
+    }
+
+    .btn-sm {
+        padding: 8px 16px;
+        font-size: 13px;
+        border-radius: 6px;
+    }
+
+    /* Order Cards */
+    .order-card {
+        border-left: 5px solid #f39c12;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        color: white;
+        text-transform: uppercase;
+    }
+
+    .info-item {
+        padding: 0;
+    }
+
+    /* Domicilio Orders */
+    .domicilio-order-card {
+        border-left: 5px solid #e74c3c;
+    }
+
+    .domicilio-order-card.paid {
+        border-left-color: #27ae60;
+    }
+
+    .payment-badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .no-data {
+        background: white;
+        border: 2px dashed #ecf0f1;
+        border-radius: 12px;
+        text-align: center;
+        color: #7f8c8d;
+    }
+
+    /* Grid containers */
+    .products-grid,
+    .orders-container,
+    .domicilio-orders-container,
+    .pagos-container,
+    .categories-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    @media (max-width: 768px) {
+        .products-grid,
+        .orders-container,
+        .domicilio-orders-container,
+        .pagos-container,
+        .categories-container {
+            grid-template-columns: 1fr;
+        }
+
+        .card-footer {
+            grid-template-columns: 1fr !important;
+        }
+    }
 </style>
+
 
 <script>
     import { supabase } from '../../lib/supabase.js';
@@ -1797,8 +2176,14 @@ import Layout from '../../layouts/Layout.astro';
             initializeProductForm();
         }
 
+        // Initialize category form
+        initializeCategoryForm();
+
         // Load initial data
-        await Promise.all([loadProducts(), loadOrders()]);
+        await Promise.all([loadProducts(), loadOrders(), loadCategories()]);
+
+        // Cargar categorías en el select del formulario de productos
+        loadCategoriesSelect();
 
         // Initialize filters
         if (filterTypeSelect || searchInput) {
@@ -1848,6 +2233,25 @@ import Layout from '../../layouts/Layout.astro';
         if (productFormElement) {
             productFormElement.addEventListener('submit', handleProductSubmit);
         }
+        
+        // Vista previa de imagen
+        const imageFileInput = document.getElementById('image_file');
+        if (imageFileInput) {
+            imageFileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                const imagePreview = document.getElementById('image_preview');
+                const previewImg = document.getElementById('preview_img');
+                
+                if (file && imagePreview && previewImg) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        previewImg.src = e.target.result;
+                        imagePreview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
     }
 
     function showProductForm(product = null) {
@@ -1886,7 +2290,10 @@ import Layout from '../../layouts/Layout.astro';
         const typeInput = document.getElementById('type');
         const ingredientsInput = document.getElementById('ingredients');
         const allergensInput = document.getElementById('allergens');
-        const imageUrlInput = document.getElementById('image_url');
+        const categoryInput = document.getElementById('category_id');
+        const currentImageUrl = document.getElementById('current_image_url');
+        const imagePreview = document.getElementById('image_preview');
+        const previewImg = document.getElementById('preview_img');
 
         if (nameInput) nameInput.value = product.name || '';
         if (descriptionInput) descriptionInput.value = product.description || '';
@@ -1895,7 +2302,14 @@ import Layout from '../../layouts/Layout.astro';
         if (typeInput) typeInput.value = product.type || '';
         if (ingredientsInput) ingredientsInput.value = product.ingredients || '';
         if (allergensInput) allergensInput.value = product.allergens || '';
-        if (imageUrlInput) imageUrlInput.value = product.image_url || '';
+        if (categoryInput) categoryInput.value = product.category_id || '';
+        
+        // Manejar imagen actual
+        if (currentImageUrl) currentImageUrl.value = product.image_url || '';
+        if (product.image_url && imagePreview && previewImg) {
+            previewImg.src = product.image_url;
+            imagePreview.style.display = 'block';
+        }
     }
 
     async function handleProductSubmit(e) {
@@ -1904,20 +2318,72 @@ import Layout from '../../layouts/Layout.astro';
         if (!productFormElement) return;
 
         const formData = new FormData(productFormElement);
-        const productData = {
-            name: formData.get('name')?.toString() || '',
-            description: formData.get('description')?.toString() || '',
-            price: parseFloat(formData.get('price')?.toString() || '0'),
-            stock: parseInt(formData.get('stock')?.toString() || '0'),
-            type: formData.get('type')?.toString() || '',
-            ingredients: formData.get('ingredients')?.toString() || '',
-            allergens: formData.get('allergens')?.toString() || '',
-            image_url: formData.get('image_url')?.toString() || ''
-        };
-
+        const imageFile = formData.get('image_file');
+        const currentImageUrl = formData.get('current_image_url')?.toString() || '';
+        
         showLoading();
 
         try {
+            let imageUrl = currentImageUrl; // Usar la imagen actual por defecto
+
+            // Si se seleccionó un nuevo archivo de imagen, subirlo a Supabase Storage
+            if (imageFile && imageFile.size > 0) {
+                const { supabase } = await import('/src/db/supabase.js');
+                
+                // Generar nombre único para el archivo
+                const fileExt = imageFile.name.split('.').pop();
+                const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+                const filePath = `products/${fileName}`;
+
+                console.log('📤 Subiendo imagen:', filePath);
+
+                // Subir archivo a Supabase Storage
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('product-images')
+                    .upload(filePath, imageFile, {
+                        cacheControl: '3600',
+                        upsert: false
+                    });
+
+                if (uploadError) {
+                    console.error('❌ Error al subir imagen:', uploadError);
+                    showToast('Error al subir la imagen', 'error');
+                    hideLoading();
+                    return;
+                }
+
+                // Obtener URL pública de la imagen
+                const { data: urlData } = supabase.storage
+                    .from('product-images')
+                    .getPublicUrl(filePath);
+
+                imageUrl = urlData.publicUrl;
+                console.log('✅ Imagen subida correctamente:', imageUrl);
+
+                // Si estamos editando y había una imagen anterior, eliminarla
+                if (currentEditingProduct && currentImageUrl && currentImageUrl.includes('product-images')) {
+                    const oldPath = currentImageUrl.split('/product-images/').pop();
+                    if (oldPath) {
+                        await supabase.storage
+                            .from('product-images')
+                            .remove([oldPath]);
+                        console.log('🗑️ Imagen anterior eliminada:', oldPath);
+                    }
+                }
+            }
+
+            const productData = {
+                name: formData.get('name')?.toString() || '',
+                description: formData.get('description')?.toString() || '',
+                price: parseFloat(formData.get('price')?.toString() || '0'),
+                stock: parseInt(formData.get('stock')?.toString() || '0'),
+                type: formData.get('type')?.toString() || '',
+                ingredients: formData.get('ingredients')?.toString() || '',
+                allergens: formData.get('allergens')?.toString() || '',
+                image_url: imageUrl,
+                category_id: formData.get('category_id')?.toString() || null
+            };
+
             let result;
             if (currentEditingProduct) {
                 result = await updateProduct(currentEditingProduct.product_id, productData);
@@ -2024,52 +2490,68 @@ import Layout from '../../layouts/Layout.astro';
 
         const productsHTML = productsToRender.map(product => {
             const stockStatus = product.stock > 10 ? 'in-stock' : product.stock > 0 ? 'low-stock' : 'out-of-stock';
+            const categoryInfo = categories.find(c => c.id === product.category_id);
+            
             return `
-                <div class="product-card">
-                    <div class="stock-indicator ${stockStatus}"></div>
-                    ${product.image_url ? `
-                        <div class="product-image">
-                            <img src="${product.image_url}" alt="${product.name}" onerror="this.parentElement.style.display='none'">
-                        </div>
-                    ` : ''}
-                    <div class="product-card-header">
-                        <h3>${product.name}</h3>
-                        <div class="type-badge ${product.type}">
-                            ${product.type === 'cocina' ? '🍳 Cocina' : '🍺 Barra'}
-                        </div>
+                <div class="product-card premium-card">
+                    <div class="card-header">
+                        ${product.image_url ? `
+                            <div class="product-image-wrapper">
+                                <img src="${product.image_url}" alt="${product.name}" class="product-image" onerror="this.style.display='none'">
+                                <div class="stock-badge ${stockStatus}">
+                                    ${product.stock > 0 ? `📦 ${product.stock}` : '❌ Sin stock'}
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="product-image-wrapper no-image">
+                                <div style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 48px;">🍽️</div>
+                            </div>
+                        `}
                     </div>
                     
-                    <div class="price">Precio:  ${product.price}$</div>
-                    
-                    ${product.description ? `<div class="description">"${product.description}"</div>` : ''}
-                    
-                    ${(product.ingredients || product.allergens) ? `
-                        <div class="meta-info">
-                            ${product.ingredients ? `
-                                <div class="meta-item">
-                                    <strong>Ingredientes:</strong>
-                                    <span>${product.ingredients}</span>
-                                </div>
-                            ` : ''}
-                            ${product.allergens ? `
-                                <div class="meta-item">
-                                    <strong>Alérgenos:</strong>
-                                    <span>${product.allergens}</span>
-                                </div>
+                    <div class="card-body">
+                        <div class="card-title-row">
+                            <h3 class="product-name">${product.name}</h3>
+                            <div class="price-tag">€${parseFloat(product.price).toFixed(2)}</div>
+                        </div>
+                        
+                        <div class="badges-row">
+                            <span class="badge type-badge ${product.type}">
+                                ${product.type === 'cocina' ? '🍳 Cocina' : '🍺 Barra'}
+                            </span>
+                            ${categoryInfo ? `
+                                <span class="badge category-badge">
+                                    ${categoryInfo.icon} ${categoryInfo.name}
+                                </span>
                             ` : ''}
                         </div>
-                    ` : ''}
+                        
+                        ${product.description ? `<p class="product-description">${product.description}</p>` : ''}
+                        
+                        ${(product.ingredients || product.allergens) ? `
+                            <div class="meta-info">
+                                ${product.ingredients ? `
+                                    <div class="meta-item">
+                                        <span class="meta-label">🥘 Ingredientes:</span>
+                                        <span class="meta-value">${product.ingredients}</span>
+                                    </div>
+                                ` : ''}
+                                ${product.allergens ? `
+                                    <div class="meta-item">
+                                        <span class="meta-label">⚠️ Alérgenos:</span>
+                                        <span class="meta-value">${product.allergens}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
                     
-                    <div class="stock">Disponible: ${product.stock} unidades</div>
-                    
-                    <div class="actions">
-                        <button class="btn btn-warning" onclick="editProduct(${product.product_id})">
-                            <span class="icon">✏️</span>
-                            Editar
+                    <div class="card-footer">
+                        <button class="btn btn-sm btn-warning" onclick="editProduct(${product.product_id})" title="Editar producto">
+                            ✏️ Editar
                         </button>
-                        <button class="btn btn-danger" onclick="confirmDeleteProduct(${product.product_id})">
-                            <span class="icon">🗑️</span>
-                            Eliminar
+                        <button class="btn btn-sm btn-danger" onclick="confirmDeleteProduct(${product.product_id})" title="Eliminar producto">
+                            🗑️ Eliminar
                         </button>
                     </div>
                 </div>
@@ -2230,43 +2712,102 @@ import Layout from '../../layouts/Layout.astro';
         if (!container) return;
         
         if (!ordersToRender || ordersToRender.length === 0) {
-            container.innerHTML = '<p class="no-data">No hay pedidos disponibles</p>';
+            container.innerHTML = `
+                <div class="no-data" style="padding: 40px; text-align: center;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">📭</div>
+                    <h3 style="margin: 0 0 10px 0; color: #5d4e37;">Sin Pedidos</h3>
+                    <p style="margin: 0; color: #8b7355;">No hay pedidos disponibles en este momento</p>
+                </div>
+            `;
             return;
         }
 
-        const ordersHTML = ordersToRender.map(order => `
-            <div class="order-card ${order.status} ${order.is_paid ? 'paid' : ''}">
-                <div class="order-header">
-                    <div class="order-number">Pedido #${order.order_id}</div>
-                    <div class="order-status ${order.status}">
-                        ${getStatusText(order.status)}
+        const ordersHTML = ordersToRender.map(order => {
+            const statusIcons = {
+                'pendiente': '⏳',
+                'preparando': '👨‍🍳',
+                'listo': '✅',
+                'entregado': '🚚',
+                'pagado': '💳',
+                'cancelado': '❌'
+            };
+            
+            const statusColors = {
+                'pendiente': '#f39c12',
+                'preparando': '#3498db',
+                'listo': '#27ae60',
+                'entregado': '#2980b9',
+                'pagado': '#27ae60',
+                'cancelado': '#e74c3c'
+            };
+            
+            return `
+                <div class="premium-card order-card ${order.status} ${order.is_paid ? 'paid' : ''}" style="border-left: 5px solid ${statusColors[order.status] || '#95a5a6'};">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: start; gap: 15px;">
+                        <div>
+                            <div style="font-size: 24px; font-weight: bold; color: #2c3e50;">
+                                ${statusIcons[order.status] || '📋'} Pedido #${order.order_id}
+                            </div>
+                            <div style="color: #7f8c8d; font-size: 13px; margin-top: 5px;">
+                                ⏰ ${new Date(order.created_at).toLocaleTimeString()}
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="status-badge" style="background-color: ${statusColors[order.status] || '#95a5a6'}; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-block;">
+                                ${getStatusText(order.status).toUpperCase()}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body" style="border-top: 1px solid #ecf0f1; padding-top: 15px; margin-top: 15px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            ${order.table_number ? `
+                                <div class="info-item">
+                                    <span style="color: #7f8c8d; font-size: 12px;">Mesa</span>
+                                    <div style="font-size: 18px; font-weight: bold; color: #2c3e50;">🪑 Mesa ${order.table_number}</div>
+                                </div>
+                            ` : ''}
+                            <div class="info-item">
+                                <span style="color: #7f8c8d; font-size: 12px;">Tipo de Orden</span>
+                                <div style="font-size: 14px; font-weight: bold; color: #2c3e50;">${getOrderTypeFromProducts(order.order_items)}</div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div class="info-item" style="background: #f8f9fa; padding: 10px; border-radius: 8px;">
+                                <span style="color: #7f8c8d; font-size: 12px;">💳 Estado de Pago</span>
+                                <div style="font-size: 14px; font-weight: bold; color: ${order.is_paid ? '#27ae60' : '#e74c3c'};">
+                                    ${order.is_paid ? '✅ PAGADO' : '⏳ PENDIENTE'}
+                                    ${order.is_paid && order.payment_method ? `<br/><span style="font-size: 11px; color: #7f8c8d;">${order.payment_method}</span>` : ''}
+                                </div>
+                            </div>
+                            <div class="info-item" style="background: #f8f9fa; padding: 10px; border-radius: 8px;">
+                                <span style="color: #7f8c8d; font-size: 12px;">💰 Total</span>
+                                <div style="font-size: 20px; font-weight: bold; color: #27ae60;">€${order.total_amount?.toFixed(2) || '0.00'}</div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #ecf0f1; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                            <div style="color: #7f8c8d; font-size: 12px; margin-bottom: 10px; font-weight: bold;">📦 ITEMS</div>
+                            <div style="max-height: 150px; overflow-y: auto;">
+                                ${order.order_items ? order.order_items.map(item => `
+                                    <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #bdc3c7;">
+                                        <span style="font-size: 13px; color: #2c3e50;">
+                                            <strong>${item.quantity}x</strong> ${item.products?.name || 'Producto'}
+                                        </span>
+                                        <span style="font-weight: bold; color: #27ae60;">€${(item.quantity * (item.price || 0)).toFixed(2)}</span>
+                                    </div>
+                                `).join('') : ''}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-footer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        ${getOrderActions(order)}
                     </div>
                 </div>
-                <div class="order-info">
-                    ${order.table_number ? `<p><strong>Mesa:</strong> ${order.table_number}</p>` : ''}
-                    <p><strong>Tipo:</strong> ${getOrderTypeFromProducts(order.order_items)}</p>
-                    <p><strong>Hora:</strong> ${new Date(order.created_at).toLocaleTimeString()}</p>
-                    <p style="${order.is_paid ? 'color: #27ae60; font-weight: bold;' : 'color: #e74c3c; font-weight: bold;'}">
-                        <strong>💳 Pago:</strong> ${order.is_paid ? '✅ Pagado' : '⏳ Pendiente'}
-                        ${order.is_paid && order.payment_method ? ` (${order.payment_method})` : ''}
-                    </p>
-                </div>
-                <div class="order-items">
-                    ${order.order_items ? order.order_items.map(item => `
-                        <div class="order-item">
-                            <span>${item.quantity}x ${item.products?.name || 'Producto'}</span>
-                            <span>${(item.quantity * (item.price || 0)).toFixed(2)}€</span>
-                        </div>
-                    `).join('') : ''}
-                </div>
-                <div class="order-total">
-                    <strong>Total: ${order.total_amount?.toFixed(2) || '0.00'}€</strong>
-                </div>
-                <div class="order-actions">
-                    ${getOrderActions(order)}
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         container.innerHTML = ordersHTML;
     }
@@ -2302,7 +2843,7 @@ import Layout from '../../layouts/Layout.astro';
         // Botón de confirmar pago en barra (solo si no está pagado y status es entregado o pagado)
         if (!order.is_paid && (order.status === 'entregado' || order.status === 'pagado')) {
             actions += `
-                <button class="btn btn-warning" onclick="confirmBarPayment(${order.order_id})" style="margin-bottom: 5px; width: 100%;">
+                <button class="btn btn-warning" onclick="confirmBarPayment(${order.order_id})" style="grid-column: 1 / -1; width: 100%;">
                     💵 Confirmar Pago en Barra
                 </button>
             `;
@@ -2312,29 +2853,29 @@ import Layout from '../../layouts/Layout.astro';
         switch (order.status) {
             case 'pendiente':
                 actions += `
-                    <button class="btn btn-primary" onclick="updateOrderStatus(${order.order_id}, 'preparando')">Iniciar Preparación</button>
-                    <button class="btn btn-danger" onclick="updateOrderStatus(${order.order_id}, 'cancelado')">Cancelar</button>
+                    <button class="btn btn-sm btn-primary" onclick="updateOrderStatus(${order.order_id}, 'preparando')" style="width: 100%;">👨‍🍳 Preparar</button>
+                    <button class="btn btn-sm btn-danger" onclick="updateOrderStatus(${order.order_id}, 'cancelado')" style="width: 100%;">❌ Cancelar</button>
                 `;
                 break;
             case 'preparando':
                 actions += `
-                    <button class="btn btn-success" onclick="updateOrderStatus(${order.order_id}, 'listo')">Marcar como Listo</button>
-                    <button class="btn btn-danger" onclick="updateOrderStatus(${order.order_id}, 'cancelado')">Cancelar</button>
+                    <button class="btn btn-sm btn-success" onclick="updateOrderStatus(${order.order_id}, 'listo')" style="width: 100%;">✅ Listo</button>
+                    <button class="btn btn-sm btn-danger" onclick="updateOrderStatus(${order.order_id}, 'cancelado')" style="width: 100%;">❌ Cancelar</button>
                 `;
                 break;
             case 'listo':
-                actions += `<button class="btn btn-secondary" onclick="updateOrderStatus(${order.order_id}, 'entregado')">Marcar como Entregado</button>`;
+                actions += `<button class="btn btn-sm btn-secondary" onclick="updateOrderStatus(${order.order_id}, 'entregado')" style="grid-column: 1 / -1; width: 100%;">🚚 Marcar como Entregado</button>`;
                 break;
             case 'entregado':
             case 'pagado':
                 actions += `
-                    <button class="btn btn-info" onclick="printTicket(${order.order_id})">
+                    <button class="btn btn-sm btn-info" onclick="printTicket(${order.order_id})" style="grid-column: 1 / -1; width: 100%;">
                         🖨️ Imprimir Ticket
                     </button>
                 `;
                 break;
             case 'cancelado':
-                actions += '<span class="status-final">Pedido cancelado</span>';
+                actions += '<span style="grid-column: 1 / -1; padding: 8px; text-align: center; background: #fadbd8; color: #c0392b; border-radius: 4px; font-weight: bold;">❌ Pedido Cancelado</span>';
                 break;
         }
         
@@ -2862,7 +3403,13 @@ import Layout from '../../layouts/Layout.astro';
         if (!container) return;
         
         if (!ordersToRender || ordersToRender.length === 0) {
-            container.innerHTML = '<p class="no-data">No hay pedidos a domicilio disponibles</p>';
+            container.innerHTML = `
+                <div class="no-data" style="padding: 40px; text-align: center;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">🏠</div>
+                    <h3 style="margin: 0 0 10px 0; color: #5d4e37;">Sin Pedidos a Domicilio</h3>
+                    <p style="margin: 0; color: #8b7355;">No hay pedidos de entrega a domicilio en este momento</p>
+                </div>
+            `;
             return;
         }
 
@@ -2871,65 +3418,57 @@ import Layout from '../../layouts/Layout.astro';
             const orderDate = new Date(order.created_at).toLocaleString('es-ES');
             
             return `
-                <div class="domicilio-order-card ${order.is_paid ? 'paid' : 'pending'}">
-                    <div class="domicilio-timestamp">${orderDate}</div>
+                <div class="premium-card domicilio-order-card ${order.is_paid ? 'paid' : 'pending'}" style="border-left: 5px solid ${order.is_paid ? '#27ae60' : '#e74c3c'};">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: start; gap: 15px;">
+                        <div>
+                            <div style="font-size: 20px; font-weight: bold; color: #2c3e50;">🏠 Pedido #${order.id}</div>
+                            <div style="color: #7f8c8d; font-size: 12px; margin-top: 5px;">⏰ ${orderDate}</div>
+                        </div>
+                        <div class="payment-badge" style="background: ${order.is_paid ? '#27ae60' : '#e74c3c'}; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;">
+                            ${order.is_paid ? '✅ PAGADO' : '🔴 PENDIENTE'}
+                        </div>
+                    </div>
                     
-                    <div class="domicilio-order-header">
-                        <div class="domicilio-order-id">Pedido #${order.id}</div>
-                        <div class="payment-status ${order.is_paid ? 'paid' : 'pending'}">
-                            ${order.is_paid ? '✅ Pagado' : '🔴 Pendiente'}
-                        </div>
-                    </div>
-
-                    <div class="domicilio-customer-info">
-                        <h4>👤 Información del Cliente</h4>
-                        <div class="customer-detail">
-                            <strong>Nombre:</strong>
-                            <span>${order.nombre} ${order.apellidos}</span>
-                        </div>
-                        <div class="customer-detail">
-                            <strong>DNI:</strong>
-                            <span>${order.dni}</span>
-                        </div>
-                        <div class="customer-detail">
-                            <strong>Teléfono:</strong>
-                            <span>${order.telefono}</span>
-                        </div>
-                        <div class="domicilio-address">
-                            📍 <strong>Dirección:</strong><br>
-                            ${order.direccion}
-                        </div>
-                    </div>
-
-                    <div class="domicilio-products">
-                        <h4>🍽️ Productos</h4>
-                        ${products.map(product => `
-                            <div class="domicilio-product-item">
-                                <div>
-                                    <div class="product-item-name">${product.nombre}</div>
-                                    <div class="product-item-qty">${product.cantidad}x ${product.precio}€</div>
+                    <div class="card-body" style="border-top: 1px solid #ecf0f1; padding-top: 15px; margin-top: 15px;">
+                        <div style="background: #f0f4f8; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                            <div style="font-size: 12px; color: #7f8c8d; font-weight: bold; margin-bottom: 10px;">👤 CLIENTE</div>
+                            <div style="display: grid; gap: 8px; font-size: 13px;">
+                                <div><strong>Nombre:</strong> ${order.nombre} ${order.apellidos}</div>
+                                <div><strong>Teléfono:</strong> 📱 ${order.telefono}</div>
+                                <div><strong>DNI:</strong> ${order.dni}</div>
+                                <div style="background: white; padding: 8px; border-radius: 4px; border-left: 3px solid #3498db;">
+                                    <strong>📍 Dirección:</strong><br/>
+                                    <span style="color: #2c3e50; margin-top: 5px; display: block;">${order.direccion}</span>
                                 </div>
-                                <div class="product-item-price">${(product.cantidad * product.precio).toFixed(2)}€</div>
                             </div>
-                        `).join('')}
+                        </div>
+                        
+                        <div style="background: #ecf0f1; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                            <div style="color: #7f8c8d; font-size: 12px; margin-bottom: 10px; font-weight: bold;">🍽️ PRODUCTOS</div>
+                            <div style="max-height: 200px; overflow-y: auto;">
+                                ${products.map(product => `
+                                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #bdc3c7;">
+                                        <div style="flex: 1;">
+                                            <div style="font-weight: bold; color: #2c3e50;">${product.nombre}</div>
+                                            <div style="font-size: 12px; color: #7f8c8d;">${product.cantidad}x € ${product.precio}</div>
+                                        </div>
+                                        <div style="font-weight: bold; color: #27ae60; min-width: 60px; text-align: right;">€${(product.cantidad * product.precio).toFixed(2)}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <div style="background: #e8f8f5; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #27ae60;">
+                            <div style="font-size: 18px; font-weight: bold; color: #27ae60;">💰 Total: €${order.total?.toFixed(2) || '0.00'}</div>
+                        </div>
                     </div>
-
-                    <div class="domicilio-total">
-                        💰 Total: ${order.total?.toFixed(2) || '0.00'}€
-                    </div>
-
-                    <div class="domicilio-actions">
+                    
+                    <div class="card-footer" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
                         ${!order.is_paid ? `
-                            <button class="btn btn-success" onclick="confirmarPagoDomicilio(${order.id})">
-                                💳 Confirmar Pago
-                            </button>
-                        ` : ''}
-                        <button class="btn btn-info" onclick="imprimirPedidoDomicilio(${order.id})">
-                            🖨️ Imprimir
-                        </button>
-                        <button class="btn btn-danger" onclick="eliminarPedidoDomicilio(${order.id})">
-                            🗑️ Eliminar
-                        </button>
+                            <button class="btn btn-sm btn-success" onclick="confirmarPagoDomicilio(${order.id})" style="width: 100%;">💳 Pagar</button>
+                        ` : '<div></div>'}
+                        <button class="btn btn-sm btn-info" onclick="imprimirPedidoDomicilio(${order.id})" style="width: 100%;">🖨️ Imprimir</button>
+                        <button class="btn btn-sm btn-danger" onclick="eliminarPedidoDomicilio(${order.id})" style="width: 100%;">🗑️ Eliminar</button>
                     </div>
                 </div>
             `;
@@ -3435,4 +3974,793 @@ import Layout from '../../layouts/Layout.astro';
             </html>
         `;
     }
+
+    // Función para extraer todos los tickets
+    window.extractAllTickets = async function() {
+        try {
+            console.log('🎫 Extrayendo todos los tickets...');
+            
+            if (!pagosEnBarra || pagosEnBarra.length === 0) {
+                showToast('No hay pagos pendientes para extraer tickets', 'warning');
+                return;
+            }
+
+            // Agrupar pedidos por mesa
+            const mesasConPedidos = {};
+            pagosEnBarra.forEach(pago => {
+                if (!mesasConPedidos[pago.table_number]) {
+                    mesasConPedidos[pago.table_number] = [];
+                }
+                mesasConPedidos[pago.table_number].push(pago);
+            });
+
+            // Generar ticket consolidado para todas las mesas
+            const allTicketsContent = Object.keys(mesasConPedidos).map(mesa => {
+                const orders = mesasConPedidos[mesa];
+                return generateTicketContent(mesa, orders);
+            }).join('<div style="page-break-after: always;"></div>');
+
+            // Crear ventana de impresión
+            const printWindow = window.open('', '_blank');
+            if (printWindow) {
+                printWindow.document.write(`
+                    <html>
+                        <head>
+                            <title>Todos los Tickets - BarBorja</title>
+                            <style>
+                                body { font-family: 'Courier New', monospace; margin: 0; padding: 20px; }
+                                @media print {
+                                    body { margin: 0; padding: 0; }
+                                    .page-break { page-break-after: always; }
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            ${allTicketsContent}
+                        </body>
+                    </html>
+                `);
+                printWindow.document.close();
+                printWindow.print();
+                printWindow.close();
+            }
+
+            showToast(`Tickets extraídos para ${Object.keys(mesasConPedidos).length} mesas`, 'success');
+            
+        } catch (error) {
+            console.error('❌ Error al extraer tickets:', error);
+            showToast('Error al extraer los tickets', 'error');
+        }
+    };
+
+    // Función para vaciar pagos confirmados (marcar como archivados)
+    window.clearAllCashPayments = async function() {
+        try {
+            console.log('🗑️ Iniciando archivado de pagos confirmados...');
+            
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            // Obtener todos los pedidos en efectivo ya confirmados (is_paid = true)
+            const { data: paidOrders, error: fetchError } = await supabase
+                .from('orders')
+                .select('order_id, table_number, total_amount')
+                .eq('payment_method', 'efectivo')
+                .eq('is_paid', true);
+
+            if (fetchError) {
+                console.error('❌ Error al obtener pedidos pagados:', fetchError);
+                showToast('Error al obtener pedidos pagados', 'error');
+                return;
+            }
+
+            if (!paidOrders || paidOrders.length === 0) {
+                showToast('No hay pagos confirmados para archivar', 'info');
+                return;
+            }
+
+            // Confirmar acción con el usuario
+            const confirmMessage = `¿Estás seguro de que quieres archivar ${paidOrders.length} pedidos confirmados?\n\nEsto los ocultará de la vista pero se mantendrán en el historial.`;
+            if (!confirm(confirmMessage)) {
+                showToast('Operación cancelada', 'info');
+                return;
+            }
+
+            showLoading();
+
+            // Marcar como archivados en lugar de eliminar
+            const orderIds = paidOrders.map(order => order.order_id);
+            const { error: updateError } = await supabase
+                .from('orders')
+                .update({ status: 'archivado' })
+                .in('order_id', orderIds);
+
+            if (updateError) {
+                console.error('❌ Error al archivar pedidos:', updateError);
+                showToast('Error al archivar pedidos', 'error');
+                return;
+            }
+
+            console.log(`✅ Archivados ${paidOrders.length} pedidos confirmados`);
+            showToast(`Se archivaron ${paidOrders.length} pedidos confirmados`, 'success');
+            
+            // Recargar la lista de pagos en barra
+            await loadPagosEnBarra();
+            
+        } catch (error) {
+            console.error('❌ Error al archivar pagos confirmados:', error);
+            showToast('Error al archivar pagos confirmados', 'error');
+        } finally {
+            hideLoading();
+        }
+    };
+
+    // Funciones para Pedidos Mesa
+    window.extractAllOrderTickets = async function() {
+        try {
+            console.log('🎫 Extrayendo todos los tickets de pedidos mesa...');
+            
+            if (!orders || orders.length === 0) {
+                showToast('No hay pedidos de mesa para extraer tickets', 'warning');
+                return;
+            }
+
+            // Agrupar pedidos por mesa
+            const mesasConPedidos = {};
+            orders.forEach(order => {
+                if (!mesasConPedidos[order.table_number]) {
+                    mesasConPedidos[order.table_number] = [];
+                }
+                mesasConPedidos[order.table_number].push(order);
+            });
+
+            // Generar ticket consolidado para todas las mesas
+            const allTicketsContent = Object.keys(mesasConPedidos).map(mesa => {
+                const ordersMesa = mesasConPedidos[mesa];
+                return generateOrderTicketContent(mesa, ordersMesa);
+            }).join('<div style="page-break-after: always;"></div>');
+
+            // Crear ventana de impresión
+            const printWindow = window.open('', '_blank');
+            if (printWindow) {
+                printWindow.document.write(`
+                    <html>
+                        <head>
+                            <title>Tickets Pedidos Mesa - BarBorja</title>
+                            <style>
+                                body { font-family: 'Courier New', monospace; margin: 0; padding: 20px; }
+                                @media print {
+                                    body { margin: 0; padding: 0; }
+                                    .page-break { page-break-after: always; }
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            ${allTicketsContent}
+                        </body>
+                    </html>
+                `);
+                printWindow.document.close();
+                printWindow.print();
+                printWindow.close();
+            }
+
+            showToast(`Tickets extraídos para ${Object.keys(mesasConPedidos).length} mesas`, 'success');
+            
+        } catch (error) {
+            console.error('❌ Error al extraer tickets de mesa:', error);
+            showToast('Error al extraer los tickets de mesa', 'error');
+        }
+    };
+
+    window.clearAllOrders = async function() {
+        try {
+            console.log('🗑️ Iniciando archivado de pedidos entregados...');
+            
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            // Obtener todos los pedidos entregados
+            const { data: deliveredOrders, error: fetchError } = await supabase
+                .from('orders')
+                .select('order_id, table_number, total_amount, status')
+                .eq('status', 'entregado');
+
+            if (fetchError) {
+                console.error('❌ Error al obtener pedidos entregados:', fetchError);
+                showToast('Error al obtener pedidos entregados', 'error');
+                return;
+            }
+
+            if (!deliveredOrders || deliveredOrders.length === 0) {
+                showToast('No hay pedidos entregados para archivar', 'info');
+                return;
+            }
+
+            // Confirmar acción con el usuario
+            const confirmMessage = `¿Estás seguro de que quieres archivar ${deliveredOrders.length} pedidos entregados?\n\nEsto los ocultará de la vista pero se mantendrán en el historial.`;
+            if (!confirm(confirmMessage)) {
+                showToast('Operación cancelada', 'info');
+                return;
+            }
+
+            showLoading();
+
+            // Marcar como archivados
+            const orderIds = deliveredOrders.map(order => order.order_id);
+            const { error: updateError } = await supabase
+                .from('orders')
+                .update({ status: 'archivado' })
+                .in('order_id', orderIds);
+
+            if (updateError) {
+                console.error('❌ Error al archivar pedidos:', updateError);
+                showToast('Error al archivar pedidos', 'error');
+                return;
+            }
+
+            console.log(`✅ Archivados ${deliveredOrders.length} pedidos entregados`);
+            showToast(`Se archivaron ${deliveredOrders.length} pedidos entregados`, 'success');
+            
+            // Recargar la lista de pedidos
+            await loadOrders();
+            
+        } catch (error) {
+            console.error('❌ Error al archivar pedidos entregados:', error);
+            showToast('Error al archivar pedidos entregados', 'error');
+        } finally {
+            hideLoading();
+        }
+    };
+
+    // Funciones para Pedidos a Domicilio
+    window.extractAllDeliveryTickets = async function() {
+        try {
+            console.log('🎫 Extrayendo todos los tickets de domicilio...');
+            
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            // Obtener pedidos a domicilio de la tabla correcta
+            const { data: deliveryOrders, error } = await supabase
+                .from('pedidos_domicilio')
+                .select(`
+                    id,
+                    nombre,
+                    apellidos,
+                    dni,
+                    telefono,
+                    direccion,
+                    productos,
+                    total,
+                    is_paid,
+                    created_at,
+                    updated_at,
+                    payment_method,
+                    stripe_payment_id
+                `)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('❌ Error al obtener pedidos de domicilio:', error);
+                showToast('Error al obtener pedidos', 'error');
+                return;
+            }
+
+            if (!deliveryOrders || deliveryOrders.length === 0) {
+                showToast('No hay pedidos de domicilio para extraer tickets', 'warning');
+                return;
+            }
+
+            // Generar tickets para todos los pedidos
+            const allTicketsContent = deliveryOrders.map(order => {
+                return generateDeliveryTicketContent(order);
+            }).join('<div style="page-break-after: always;"></div>');
+
+            // Crear ventana de impresión
+            const printWindow = window.open('', '_blank');
+            if (printWindow) {
+                printWindow.document.write(`
+                    <html>
+                        <head>
+                            <title>Tickets Domicilio - BarBorja</title>
+                            <style>
+                                body { font-family: 'Courier New', monospace; margin: 0; padding: 20px; }
+                                @media print {
+                                    body { margin: 0; padding: 0; }
+                                    .page-break { page-break-after: always; }
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            ${allTicketsContent}
+                        </body>
+                    </html>
+                `);
+                printWindow.document.close();
+                printWindow.print();
+                printWindow.close();
+            }
+
+            showToast(`Tickets extraídos para ${deliveryOrders.length} pedidos de domicilio`, 'success');
+            
+        } catch (error) {
+            console.error('❌ Error al extraer tickets de domicilio:', error);
+            showToast('Error al extraer los tickets de domicilio', 'error');
+        }
+    };
+
+    window.clearAllDeliveries = async function() {
+        try {
+            console.log('🗑️ Iniciando archivado de pedidos de domicilio completados...');
+            
+            const { supabase } = await import('/src/db/supabase.js');
+            
+            // Obtener todos los pedidos de domicilio pagados
+            const { data: completedOrders, error: fetchError } = await supabase
+                .from('pedidos_domicilio')
+                .select('id, nombre, total')
+                .eq('is_paid', true);
+
+            if (fetchError) {
+                console.error('❌ Error al obtener pedidos completados:', fetchError);
+                showToast('Error al obtener pedidos completados', 'error');
+                return;
+            }
+
+            if (!completedOrders || completedOrders.length === 0) {
+                showToast('No hay pedidos de domicilio completados para archivar', 'info');
+                return;
+            }
+
+            // Confirmar acción con el usuario
+            const confirmMessage = `¿Estás seguro de que quieres eliminar ${completedOrders.length} pedidos de domicilio completados?\n\nEsta acción eliminará permanentemente los registros.`;
+            if (!confirm(confirmMessage)) {
+                showToast('Operación cancelada', 'info');
+                return;
+            }
+
+            showLoading();
+
+            // Para pedidos_domicilio, eliminar definitivamente los pagados
+            const orderIds = completedOrders.map(order => order.id);
+            const { error: deleteError } = await supabase
+                .from('pedidos_domicilio')
+                .delete()
+                .in('id', orderIds);
+
+            if (deleteError) {
+                console.error('❌ Error al eliminar pedidos de domicilio:', deleteError);
+                showToast('Error al eliminar pedidos de domicilio', 'error');
+                return;
+            }
+
+            console.log(`✅ Eliminados ${completedOrders.length} pedidos de domicilio completados`);
+            showToast(`Se eliminaron ${completedOrders.length} pedidos de domicilio completados`, 'success');
+            
+            // Recargar la sección de domicilio si existe la función
+            try {
+                await loadDomicilioOrders();
+            } catch (e) {
+                console.log('Función loadDomicilioOrders no disponible, se necesita recargar manualmente');
+                showToast('Por favor, cambia de pestaña y regresa para ver los cambios', 'info');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error al procesar pedidos de domicilio:', error);
+            showToast('Error al procesar pedidos de domicilio', 'error');
+        } finally {
+            hideLoading();
+        }
+    };
+
+    // Funciones auxiliares para generar contenido de tickets
+    function generateOrderTicketContent(mesa, orders) {
+        const now = new Date();
+        const formattedDate = now.toLocaleDateString('es-ES');
+        const formattedTime = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        const totalAmount = orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
+
+        let itemsHTML = '';
+        orders.forEach(order => {
+            if (order.order_items && order.order_items.length > 0) {
+                order.order_items.forEach(item => {
+                    const productName = item.products?.name || 'Producto';
+                    itemsHTML += `
+                        <tr>
+                            <td>${item.quantity}x</td>
+                            <td>${productName}</td>
+                            <td style="text-align: right;">${(item.price * item.quantity).toFixed(2)}€</td>
+                        </tr>
+                    `;
+                });
+            }
+        });
+
+        return `
+            <div class="ticket" style="border: 2px dashed #333; padding: 20px; margin: 20px 0; font-family: 'Courier New', monospace;">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0;">BarBorja</h2>
+                    <p style="margin: 5px 0;">Mesa ${mesa}</p>
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <p><strong>Fecha:</strong> ${formattedDate}</p>
+                    <p><strong>Hora:</strong> ${formattedTime}</p>
+                    <p><strong>Pedidos:</strong> ${orders.length}</p>
+                </div>
+                
+                <table style="width: 100%; margin: 15px 0;">
+                    <thead>
+                        <tr>
+                            <th>Cant.</th>
+                            <th>Producto</th>
+                            <th style="text-align: right;">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHTML}
+                    </tbody>
+                    <tfoot>
+                        <tr style="border-top: 2px solid #333;">
+                            <td colspan="2"><strong>TOTAL</strong></td>
+                            <td style="text-align: right;"><strong>${totalAmount.toFixed(2)}€</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                <div style="text-align: center; margin-top: 15px;">
+                    <p>¡Gracias por su visita!</p>
+                </div>
+            </div>
+        `;
+    }
+
+    function generateDeliveryTicketContent(order) {
+        const now = new Date();
+        const formattedDate = now.toLocaleDateString('es-ES');
+        const formattedTime = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+        let itemsHTML = '';
+        let productos = [];
+        
+        // Parsear el JSON de productos
+        try {
+            productos = typeof order.productos === 'string' ? JSON.parse(order.productos) : (order.productos || []);
+        } catch (error) {
+            console.error('Error parsing productos JSON:', error);
+            productos = [];
+        }
+
+        if (productos && productos.length > 0) {
+            productos.forEach(item => {
+                const productName = item.nombre || 'Producto';
+                const quantity = item.cantidad || 1;
+                const price = parseFloat(item.precio || 0);
+                const subtotal = quantity * price;
+                
+                itemsHTML += `
+                    <tr>
+                        <td>${quantity}x</td>
+                        <td>${productName}</td>
+                        <td style="text-align: right;">${subtotal.toFixed(2)}€</td>
+                    </tr>
+                `;
+            });
+        }
+
+        return `
+            <div class="ticket" style="border: 2px dashed #333; padding: 20px; margin: 20px 0; font-family: 'Courier New', monospace;">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0;">BarBorja</h2>
+                    <p style="margin: 5px 0;">🏠 DOMICILIO</p>
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <p><strong>Pedido:</strong> #${order.id}</p>
+                    <p><strong>Cliente:</strong> ${order.nombre} ${order.apellidos || ''}</p>
+                    <p><strong>DNI:</strong> ${order.dni}</p>
+                    <p><strong>Teléfono:</strong> ${order.telefono}</p>
+                    <p><strong>Dirección:</strong> ${order.direccion}</p>
+                    <p><strong>Fecha:</strong> ${formattedDate}</p>
+                    <p><strong>Hora:</strong> ${formattedTime}</p>
+                    <p><strong>Estado Pago:</strong> ${order.is_paid ? '✅ Pagado' : '⏳ Pendiente'}</p>
+                    <p><strong>Método Pago:</strong> ${order.payment_method || 'No especificado'}</p>
+                </div>
+                
+                <table style="width: 100%; margin: 15px 0;">
+                    <thead>
+                        <tr>
+                            <th>Cant.</th>
+                            <th>Producto</th>
+                            <th style="text-align: right;">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHTML}
+                    </tbody>
+                    <tfoot>
+                        <tr style="border-top: 2px solid #333;">
+                            <td colspan="2"><strong>TOTAL</strong></td>
+                            <td style="text-align: right;"><strong>${parseFloat(order.total).toFixed(2)}€</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                <div style="text-align: center; margin-top: 15px;">
+                    <p>¡Gracias por su pedido!</p>
+                    ${!order.is_paid ? '<p style="color: orange; font-weight: bold;">⚠️ Pago pendiente</p>' : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    // ============ CATEGORIES MANAGEMENT ============
+    let categories = [];
+    let currentEditingCategory = null;
+
+    const addCategoryBtn = document.getElementById('add-category-btn');
+    const categoryForm = document.getElementById('category-form');
+    const categoryFormElement = document.getElementById('category-form-element');
+    const cancelCategoryFormBtn = document.getElementById('cancel-category-form');
+    const categoriesListContainer = document.getElementById('categories-list');
+
+    function initializeCategoryForm() {
+        if (addCategoryBtn) {
+            addCategoryBtn.addEventListener('click', () => showCategoryForm());
+        }
+        if (cancelCategoryFormBtn) {
+            cancelCategoryFormBtn.addEventListener('click', hideCategoryForm);
+        }
+        if (categoryFormElement) {
+            categoryFormElement.addEventListener('submit', handleCategorySubmit);
+        }
+    }
+
+    function showCategoryForm(category = null) {
+        currentEditingCategory = category;
+        const formTitle = document.getElementById('category-form-title');
+
+        if (category) {
+            if (formTitle) formTitle.textContent = 'Editar Categoría';
+            fillCategoryForm(category);
+        } else {
+            if (formTitle) formTitle.textContent = 'Crear Nueva Categoría';
+            if (categoryFormElement) categoryFormElement.reset();
+        }
+
+        if (categoryForm) {
+            categoryForm.classList.remove('hidden');
+            categoryForm.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+
+    function hideCategoryForm() {
+        if (categoryForm) {
+            categoryForm.classList.add('hidden');
+        }
+        currentEditingCategory = null;
+        if (categoryFormElement) {
+            categoryFormElement.reset();
+        }
+    }
+
+    function fillCategoryForm(category) {
+        const nameInput = document.getElementById('cat-name');
+        const iconInput = document.getElementById('cat-icon');
+        const orderInput = document.getElementById('cat-order');
+        const descriptionInput = document.getElementById('cat-description');
+
+        if (nameInput) nameInput.value = category.name || '';
+        if (iconInput) iconInput.value = category.icon || '';
+        if (orderInput) orderInput.value = category.order || 1;
+        if (descriptionInput) descriptionInput.value = category.description || '';
+    }
+
+    async function handleCategorySubmit(e) {
+        e.preventDefault();
+
+        if (!categoryFormElement) return;
+
+        const formData = new FormData(categoryFormElement);
+        const categoryData = {
+            name: formData.get('name')?.toString() || '',
+            icon: formData.get('icon')?.toString() || '',
+            order: parseInt(formData.get('order')?.toString() || '1'),
+            description: formData.get('description')?.toString() || ''
+        };
+
+        showLoading();
+
+        try {
+            let result;
+            if (currentEditingCategory) {
+                result = await updateCategory(currentEditingCategory.id, categoryData);
+            } else {
+                result = await createCategory(categoryData);
+            }
+
+            if (result) {
+                showToast('Categoría guardada exitosamente', 'success');
+                hideCategoryForm();
+                loadCategories();
+                loadCategoriesSelect();
+            } else {
+                showToast('Error al guardar la categoría', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Error al guardar la categoría', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    async function createCategory(categoryData) {
+        try {
+            const { supabase } = await import('/src/lib/supabase.js');
+            
+            const { data, error } = await supabase
+                .from('categories')
+                .insert([categoryData])
+                .select();
+
+            if (error) throw error;
+            return data && data.length > 0;
+        } catch (error) {
+            console.error('Error creating category:', error);
+            return null;
+        }
+    }
+
+    async function updateCategory(id, categoryData) {
+        try {
+            const { supabase } = await import('/src/lib/supabase.js');
+            
+            const { data, error } = await supabase
+                .from('categories')
+                .update(categoryData)
+                .eq('id', id)
+                .select();
+
+            if (error) throw error;
+            return data && data.length > 0;
+        } catch (error) {
+            console.error('Error updating category:', error);
+            return null;
+        }
+    }
+
+    async function deleteCategory(id) {
+        if (!confirm('¿Está seguro de que desea eliminar esta categoría?')) return;
+
+        try {
+            const { supabase } = await import('/src/lib/supabase.js');
+            
+            const { error } = await supabase
+                .from('categories')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            showToast('Categoría eliminada exitosamente', 'success');
+            loadCategories();
+            loadCategoriesSelect();
+        } catch (error) {
+            console.error('Error deleting category:', error);
+            showToast('Error al eliminar la categoría', 'error');
+        }
+    }
+
+    async function loadCategories() {
+        if (!categoriesListContainer) return;
+        
+        try {
+            const { supabase } = await import('/src/lib/supabase.js');
+            
+            const { data, error } = await supabase
+                .from('categories')
+                .select('*')
+                .order('order', { ascending: true });
+            
+            if (error) {
+                console.error('❌ Error fetching categories:', error);
+                categories = [];
+            } else {
+                categories = data || [];
+            }
+            
+            renderCategories();
+        } catch (error) {
+            console.error('Error loading categories:', error);
+        }
+    }
+
+    async function loadCategoriesSelect() {
+        try {
+            const { supabase } = await import('/src/lib/supabase.js');
+            
+            const { data: categoriesData, error } = await supabase
+                .from('categories')
+                .select('id, name, icon')
+                .order('order', { ascending: true });
+
+            if (error) {
+                console.error('Error loading categories select:', error);
+                return;
+            }
+
+            const categorySelect = document.getElementById('category_id');
+            if (!categorySelect) return;
+
+            // Limpiar opciones existentes (excepto la primera)
+            while (categorySelect.options.length > 1) {
+                categorySelect.remove(1);
+            }
+
+            // Agregar categorías
+            if (categoriesData && categoriesData.length > 0) {
+                categoriesData.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat.id;
+                    option.textContent = `${cat.icon} ${cat.name}`;
+                    categorySelect.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading categories select:', error);
+        }
+    }
+
+    function renderCategories() {
+        if (!categoriesListContainer) return;
+
+        if (!categories || categories.length === 0) {
+            categoriesListContainer.innerHTML = `
+                <div class="no-data">
+                    <h3>📦 Sin categorías</h3>
+                    <p>No hay categorías creadas. ¡Crea una nueva!</p>
+                </div>
+            `;
+            return;
+        }
+
+        categoriesListContainer.innerHTML = categories.map(category => `
+            <div class="premium-card category-card">
+                <div class="card-header" style="text-align: center; padding: 20px;">
+                    <div style="font-size: 48px; margin-bottom: 12px;">
+                        ${category.icon || '📦'}
+                    </div>
+                    <h3 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 18px; font-weight: 700;">
+                        ${category.name}
+                    </h3>
+                    <p style="margin: 0; color: #7f8c8d; font-size: 13px;">
+                        Orden: ${category.order}
+                    </p>
+                </div>
+                
+                <div class="card-body" style="text-align: center; padding: 15px 20px;">
+                    ${category.description ? `
+                        <p style="margin: 0; color: #7f8c8d; font-size: 13px; line-height: 1.5;">
+                            ${category.description}
+                        </p>
+                    ` : '<p style="margin: 0; color: #bdc3c7; font-size: 13px;">Sin descripción</p>'}
+                </div>
+                
+                <div class="card-footer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button class="btn btn-sm btn-warning" onclick="window.editCategory('${category.id}')" style="width: 100%;">
+                        ✏️ Editar
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="window.deleteCategory('${category.id}')" style="width: 100%;">
+                        🗑️ Eliminar
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    window.editCategory = function(id) {
+        const category = categories.find(c => c.id === id);
+        if (category) showCategoryForm(category);
+    };
+
+    window.deleteCategory = deleteCategory;
 </script>

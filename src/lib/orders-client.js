@@ -57,6 +57,39 @@ export async function createOrder(orderData, orderItems) {
             return null;
         }
 
+        // Update product stock for each item
+        for (const item of orderItems) {
+            console.log(`📦 Actualizando stock del producto ${item.product_id}, cantidad: ${item.quantity}`);
+            
+            // First get current stock
+            const { data: product, error: getError } = await supabase
+                .from('products')
+                .select('stock')
+                .eq('product_id', item.product_id)
+                .single();
+            
+            if (getError) {
+                console.warn('⚠️ Warning: Could not get current stock for product', item.product_id, getError);
+                continue;
+            }
+            
+            // Calculate new stock (never below 0)
+            const newStock = Math.max(0, (product.stock || 0) - item.quantity);
+            
+            // Update stock
+            const { error: stockError } = await supabase
+                .from('products')
+                .update({ stock: newStock })
+                .eq('product_id', item.product_id);
+            
+            if (stockError) {
+                console.warn('⚠️ Warning: Could not update stock for product', item.product_id, stockError);
+                // Don't fail the order creation if stock update fails
+            } else {
+                console.log(`✅ Stock actualizado para producto ${item.product_id}: ${product.stock} → ${newStock}`);
+            }
+        }
+
         console.log(`✅ Pedido creado exitosamente para Mesa ${tableNumber || 'N/A'} - ID: ${order.order_id} - Total: ${orderData.total_amount}€`);
         
         // Return the complete order

@@ -94,15 +94,7 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
                 </div>
             </div>
 
-            <div id="no-orders" class="no-orders hidden">
-                <div class="empty-state">
-                    <h3>No hay pedidos pendientes</h3>
-                    <p>Esta mesa no tiene pedidos pendientes de pago.</p>
-                    <a href={`/mesa/access?token=${token}`} class="btn-back">
-                        ← Volver a la Carta
-                    </a>
-                </div>
-            </div>
+
         </div>
     </div>
 
@@ -770,14 +762,59 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
     // Obtener número de mesa del servidor
     const mesaNumeroClient = window.MESA_NUMERO;
 
+    // Función para gestionar la visibilidad de las secciones
+    function showSection(sectionToShow) {
+        const sections = ['loading-orders', 'orders-content'];
+        
+        console.log(`🎛️ Mostrando sección: ${sectionToShow}`);
+        
+        sections.forEach(sectionId => {
+            const element = document.getElementById(sectionId);
+            if (element) {
+                if (sectionId === sectionToShow) {
+                    element.classList.remove('hidden');
+                    console.log(`✅ ${sectionId} mostrado`);
+                } else {
+                    element.classList.add('hidden');
+                    console.log(`❌ ${sectionId} ocultado`);
+                }
+            }
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', async function() {
         console.log(`🏦 Iniciando sistema de pago para Mesa ${mesaNumeroClient}`);
+        console.log('🚀 DOM Content Loaded - Iniciando carga de pedidos...');
         
-        await loadOrders();
+        // Verificar que los elementos DOM estén disponibles
+        const loadingSection = document.getElementById('loading-orders');
+        const ordersContent = document.getElementById('orders-content');
+        
+        console.log('🔍 Verificando elementos DOM iniciales:', {
+            loadingSection: !!loadingSection,
+            ordersContent: !!ordersContent,
+            loadingVisible: loadingSection && !loadingSection.classList.contains('hidden'),
+            ordersVisible: ordersContent && !ordersContent.classList.contains('hidden')
+        });
+        
+        // Asegurar que el loading esté visible al inicio
+        console.log('🎬 Asegurando que loading esté visible al inicio...');
+        showSection('loading-orders');
+        
+        try {
+            console.log('📞 Llamando a loadOrders()...');
+            await loadOrders();
+            console.log('✅ loadOrders() completado');
+        } catch (error) {
+            console.error('❌ Error durante la inicialización:', error);
+            showNoOrders();
+        }
         
         // Event listeners para métodos de pago
-        document.getElementById('cash-payment-btn').addEventListener('click', showCashModal);
-        document.getElementById('card-payment-btn').addEventListener('click', initializeStripe);
+        document.getElementById('cash-payment-btn')?.addEventListener('click', showCashModal);
+        document.getElementById('card-payment-btn')?.addEventListener('click', initializeStripe);
+        
+        console.log('✅ Inicialización completada');
     });
 
     async function loadOrders() {
@@ -817,7 +854,7 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
             if (error) {
                 console.error('❌ Error loading orders:', error);
-                showNoOrders();
+                console.log('🔄 Error capturado, manteniendo loading visible');
                 return;
             }
 
@@ -825,32 +862,59 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
             console.log(`✅ ${orders.length} pedidos cargados`);
 
             if (orders.length === 0) {
-                showNoOrders();
+                console.log('⚠️ No hay pedidos para mostrar, manteniendo loading visible');
+                // Mantener el loading visible cuando no hay pedidos
                 return;
             }
 
+            console.log('📊 Hay pedidos para mostrar, ejecutando displayOrders()');
             displayOrders();
+            console.log('✅ displayOrders() ejecutado, loadOrders completado exitosamente');
             
         } catch (error) {
             console.error('💥 Error en loadOrders:', error);
-            showNoOrders();
+            console.log('🔄 Error capturado, manteniendo loading visible');
         }
     }
 
     function displayOrders() {
+        console.log('🎨 Ejecutando displayOrders()...');
+        
         const loadingSection = document.getElementById('loading-orders');
         const ordersContent = document.getElementById('orders-content');
         const ordersList = document.getElementById('orders-list');
         const totalAmountElement = document.getElementById('total-amount');
 
-        // Ocultar loading y mostrar contenido
-        loadingSection.classList.add('hidden');
-        ordersContent.classList.remove('hidden');
+        console.log('🔍 Elementos DOM encontrados:', {
+            loadingSection: !!loadingSection,
+            ordersContent: !!ordersContent,
+            ordersList: !!ordersList,
+            totalAmountElement: !!totalAmountElement
+        });
+
+        if (!loadingSection || !ordersContent || !ordersList || !totalAmountElement) {
+            console.error('❌ No se encontraron algunos elementos DOM necesarios');
+            return;
+        }
+
+        // Usar la función centralizada para mostrar solo orders-content
+        console.log('🎯 Ejecutando showSection("orders-content") desde displayOrders()...');
+        showSection('orders-content');
+        
+        // Verificar después de showSection
+        setTimeout(() => {
+            const loadingAfter = document.getElementById('loading-orders');
+            const ordersAfter = document.getElementById('orders-content');
+            console.log('🔍 Estado después de showSection:', {
+                loadingHidden: loadingAfter?.classList.contains('hidden'),
+                ordersVisible: !ordersAfter?.classList.contains('hidden')
+            });
+        }, 100);
 
         // Calcular total
         totalAmount = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
 
-        // Generar HTML de pedidos
+        // Generar HTML de pedidos simplificado
         let ordersHTML = '';
         orders.forEach(order => {
             const date = new Date(order.created_at);
@@ -868,7 +932,6 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
                 <div class="order-item">
                     <div class="order-header">
                         <span class="order-id">Pedido #${order.order_id}</span>
-                        <span class="order-status">Entregado</span>
                     </div>
                     <div class="order-time">📅 ${formattedDate} - 🕐 ${formattedTime}</div>
                     <div class="order-items">
@@ -895,14 +958,34 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
         ordersList.innerHTML = ordersHTML;
         totalAmountElement.textContent = totalAmount.toFixed(2) + '€';
+        
+        // FORZAR ocultamiento del loading como último recurso
+        console.log('🔨 Forzando ocultamiento del loading con métodos adicionales...');
+        const loadingFinal = document.getElementById('loading-orders');
+        if (loadingFinal) {
+            loadingFinal.style.display = 'none';
+            loadingFinal.classList.add('hidden');
+            console.log('✅ Loading forzado a display: none');
+        }
+        
+        console.log('✅ displayOrders() completado totalmente');
     }
 
     function showNoOrders() {
+        console.log('❌ Ejecutando showNoOrders() - No hay pedidos para mostrar');
+        
         const loadingSection = document.getElementById('loading-orders');
+        const ordersContent = document.getElementById('orders-content');
         const noOrdersSection = document.getElementById('no-orders');
         
-        loadingSection.classList.add('hidden');
-        noOrdersSection.classList.remove('hidden');
+        console.log('🔍 Elementos encontrados:', {
+            loadingSection: !!loadingSection,
+            ordersContent: !!ordersContent,
+            noOrdersSection: !!noOrdersSection
+        });
+        
+        // Usar la función centralizada para mostrar solo no-orders
+        showSection('no-orders');
     }
 
     function showCashModal() {
@@ -1088,19 +1171,63 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
         }
     }
 
-    function printReceipt() {
-        const receiptContent = generateReceiptHTML();
-        const originalContents = document.body.innerHTML;
-        
-        document.body.innerHTML = receiptContent;
-        window.print();
-        document.body.innerHTML = originalContents;
-        
-        // Reload to restore functionality
-        window.location.reload();
+    async function printReceipt() {
+        try {
+            console.log('🖨️ Generando ticket - Obteniendo estado más reciente de los pedidos...');
+            
+            // Obtener el estado más reciente de los pedidos desde la base de datos
+            const { data: latestOrders, error } = await supabase
+                .from('orders')
+                .select(`
+                    order_id,
+                    table_number,
+                    status,
+                    total_amount,
+                    created_at,
+                    payment_method,
+                    is_paid,
+                    order_items (
+                        order_item_id,
+                        quantity,
+                        price,
+                        products (
+                            name,
+                            type
+                        )
+                    )
+                `)
+                .eq('table_number', mesaNumeroClient)
+                .eq('is_paid', false)
+                .not('status', 'in', '(cancelado)')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('❌ Error al obtener pedidos actualizados:', error);
+                showToast('Error al generar el ticket', 'error');
+                return;
+            }
+
+            console.log('📊 Estado actual de pedidos para ticket:', {
+                pedidos: latestOrders?.length || 0,
+                datos: latestOrders
+            });
+
+            const receiptContent = generateReceiptHTML(latestOrders || []);
+            const originalContents = document.body.innerHTML;
+            
+            document.body.innerHTML = receiptContent;
+            window.print();
+            document.body.innerHTML = originalContents;
+            
+            // Reload to restore functionality
+            window.location.reload();
+        } catch (error) {
+            console.error('❌ Error al generar ticket:', error);
+            showToast('Error al generar el ticket', 'error');
+        }
     }
 
-    function generateReceiptHTML() {
+    function generateReceiptHTML(ordersData = null) {
         const now = new Date();
         const formattedDate = now.toLocaleDateString('es-ES', { 
             day: '2-digit', 
@@ -1112,8 +1239,16 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
             minute: '2-digit' 
         });
 
+        // Usar los pedidos proporcionados o los globales
+        const ordersToUse = ordersData || orders;
+        
+        console.log('🎫 Generando HTML del ticket con pedidos:', {
+            cantidad: ordersToUse?.length || 0,
+            pedidos: ordersToUse
+        });
+
         let itemsHTML = '';
-        orders.forEach(order => {
+        ordersToUse.forEach(order => {
             if (order.order_items && order.order_items.length > 0) {
                 order.order_items.forEach(item => {
                     const productName = item.products?.name || 'Producto';
@@ -1215,8 +1350,8 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
                             <p><strong>Mesa:</strong> ${mesaNumeroClient}</p>
                             <p><strong>Fecha:</strong> ${formattedDate}</p>
                             <p><strong>Hora:</strong> ${formattedTime}</p>
-                            <p><strong>Pedidos:</strong> ${orders.length}</p>
-                            ${orders.some(o => o.payment_method === 'efectivo' && !o.is_paid) ? 
+                            <p><strong>Pedidos:</strong> ${ordersToUse.length}</p>
+                            ${ordersToUse.some(o => o.payment_method === 'efectivo' && !o.is_paid) ? 
                                 '<p style="color: orange;"><strong>⏳ PAGO PENDIENTE EN BARRA</strong></p>' : 
                                 '<p style="color: green;"><strong>✅ PAGO CONFIRMADO</strong></p>'
                             }
@@ -1240,7 +1375,7 @@ const stripePublicKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
                         
                         <div class="ticket-footer">
                             <p>¡Gracias por su visita!</p>
-                            ${orders.some(o => o.payment_method === 'efectivo' && !o.is_paid) ? 
+                            ${ordersToUse.some(o => o.payment_method === 'efectivo' && !o.is_paid) ? 
                                 '<p style="color: orange; font-weight: bold;">📍 Presente este ticket en barra para completar el pago</p>' : 
                                 '<p>¡Esperamos verle pronto!</p>'
                             }
