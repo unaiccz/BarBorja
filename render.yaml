@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: barborja-front
+    runtime: static
+    plan: free
+    branch: main
+    buildCommand: npm run build
