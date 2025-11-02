@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: barborja-app
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm run build
+    startCommand: node server.mjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PUBLIC_SUPABASE_URL
+        scope: build
+      - key: PUBLIC_SUPABASE_KEY
+        scope: build
+      - key: PUBLIC_STRIPE_PUBLISHABLE_KEY
+        scope: build
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        scope: build
+      - key: STRIPE_SECRET_KEY
+        scope: build
+      - key: PORT
+        value: "3000"
