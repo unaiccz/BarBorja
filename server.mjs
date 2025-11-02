@@ -1,36 +1,34 @@
 #!/usr/bin/env node
 /**
- * Middleware para manejo de rutas SPA en Render
- * Este archivo asegura que todas las rutas dinámicas se sirvan correctamente
+ * Servidor para Astro en Render
+ * Ejecuta el servidor SSR de Astro
  */
 
-import express from 'express';
+import http from 'http';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { handler } from './dist/server/entry.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const app = express();
+const PORT = process.env.PORT || 3000;
 
-// Configurar directorio estático para archivos públicos
-app.use(express.static(path.join(__dirname, 'dist', 'client'), {
-  maxAge: '1h',
-  etag: false
-}));
+// Importar el handler de Astro
+const { default: handler } = await import('./dist/server/entry.mjs');
 
-// Middleware para logging
-app.use((req, res, next) => {
-  console.log(`📍 ${req.method} ${req.path}`);
-  next();
+const server = http.createServer(async (req, res) => {
+  console.log(`📍 ${req.method} ${req.url}`);
+  
+  try {
+    // Pasar la solicitud al handler de Astro
+    await handler(req, res);
+  } catch (error) {
+    console.error('❌ Error:', error);
+    res.statusCode = 500;
+    res.end('Internal Server Error');
+  }
 });
 
-// Manejo de rutas - delegarlas a Astro SSR
-app.use(handler);
-
-// Para desarrollo local
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Servidor iniciado en puerto ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Servidor Astro iniciado en puerto ${PORT}`);
   console.log(`📍 Accesible en http://0.0.0.0:${PORT}`);
-  console.log(`✅ Routing habilitado para rutas dinámicas`);
+  console.log(`✅ Rutas dinámicas habilitadas`);
 });
