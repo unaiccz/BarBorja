@@ -6,6 +6,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "start": "node ./start.mjs",
     "astro": "astro",
     "test": "node tests/functions/products-simple.test.js && node tests/functions/orders-simple.test.js && node tests/functions/order-items.test.js",
     "test:products": "node tests/functions/products-simple.test.js",
