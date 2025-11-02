@@ -1,0 +1,25 @@
+---
+// Test page para verificar que el rendering en servidor funciona
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Test Page">
+    <div style="padding: 40px; text-align: center;">
+        <h1>✅ Servidor SSR Funciona Correctamente</h1>
+        <p>Si ves esto, el rendering en servidor está OK</p>
+        <p style="margin-top: 20px; color: #666;">
+            Current time: <strong>{new Date().toLocaleString()}</strong>
+        </p>
+        <hr style="margin: 30px 0;">
+        <a href="/" style="padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 6px;">
+            ← Volver al Inicio
+        </a>
+    </div>
+</Layout>
+
+<style>
+    div {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+</style>
